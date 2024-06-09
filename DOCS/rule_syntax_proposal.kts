@@ -9,8 +9,22 @@ devices {
     }
 }
 
+scene("movie_night") {
+    lights("living room") brightness 20
+    lights("kitchen") switched off
+    tv("living room") switched on
+}
+
 rules {
     whenever not presenceIn flat perform allLights except "something" switched off
+    whenever time "20:00" perform scene "movie_night"
+}
+
+defaults {
+    lights {
+        brightness = 50
+        color = "warm_white"
+    }
 }
 
 room("living room") {
