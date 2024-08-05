@@ -1,5 +1,7 @@
 plugins {
     kotlin("jvm") version "2.0.0"
+    application
+    id("com.github.johnrengelman.shadow") version "8.1.1"
 }
 
 group = "symsig"
@@ -18,6 +20,10 @@ dependencies {
     implementation("io.ktor:ktor-server-websockets:$ktor_version")
 
     testImplementation(kotlin("test"))
+}
+
+application {
+    mainClass.set("symsig.sensei.SenseiAppKt")
 }
 
 tasks.test {
