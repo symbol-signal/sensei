@@ -27,7 +27,7 @@ defaults {
     }
 }
 
-room("living room") {
+room "living room" {
     rules {
         whenever time "5.30" or ... perform curtains open
     }
@@ -37,6 +37,9 @@ room("bathroom") {
     devices {
         mqttPresence {
             topic = "bathroom/mmWave1"
+        }
+        wsPresence {
+            sensorId = "bahtroom/main"
         }
     }
 
