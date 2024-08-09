@@ -15,7 +15,6 @@ val rooms: MutableList<Room> = mutableListOf()
 fun room(name: String, init: Room.() -> Unit) {
     val room = Room(name)
     log.debug("Creating room {}", name)
-    println("hello")
     room.init()
     rooms.add(room)
 }
@@ -24,16 +23,20 @@ class Room(val name: String) {
 
     internal val devices = Devices()
 
-    internal val rules = Rules()
+    internal val rules: MutableList<Rule> = mutableListOf()
 
     fun devices(init: Devices.() -> Unit) {
         log.debug("Defining devices")
         devices.init()
     }
 
-    fun rules(init: Rules.() -> Unit) {
+    fun rules(init: RuleBuilder.() -> Unit) {
         log.debug("Defining rules")
-        rules.init()
+        RuleBuilder(this).init()
+    }
+
+    internal fun addRule(rule: Rule) {
+        rules.add(rule)
     }
 }
 
@@ -53,18 +56,16 @@ class WebSocketPresenceSensor() {
     var sensorId: String = ""
 }
 
-class Rules() {
-
-    internal val rules: MutableList<Rule> = mutableListOf()
+class RuleBuilder(private val room: Room) {
 
     fun rule(description: String, init: Rule.() -> Unit) {
         val rule = Rule(description)
         rule.init()
-        rules.add(rule)
+        room.addRule(rule)
     }
 }
 
-class Rule(description: String) {
+class Rule(val description: String) {
 
     var whenever = Condition()
 

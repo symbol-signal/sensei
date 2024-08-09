@@ -40,9 +40,9 @@ class DslGrammarTest : StringSpec({
             }
         }
 
-        rooms[0].rules.rules.size shouldBe 1
-        rooms[0].rules.rules[0].shouldBeInstanceOf<Rule>()
-        rooms[0].rules.rules[0].whenever.shouldBeInstanceOf<Condition>()
+        rooms[0].rules.size shouldBe 1
+        rooms[0].rules[0].shouldBeInstanceOf<Rule>()
+        rooms[0].rules[0].whenever.shouldBeInstanceOf<Condition>()
     }
 
     "should create multiple rooms" {
