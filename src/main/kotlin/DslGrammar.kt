@@ -1,23 +1,30 @@
 package symsig.sensei
 
 import org.slf4j.LoggerFactory
+import kotlin.time.Duration
+import kotlin.time.DurationUnit
+import kotlin.time.toDuration
 
 private val log = LoggerFactory.getLogger("symsig.sensei")
+
+val Int.seconds
+    get() = this.toDuration(DurationUnit.SECONDS)
 
 val rooms: MutableList<Room> = mutableListOf()
 
 fun room(name: String, init: Room.() -> Unit) {
     val room = Room(name)
     log.debug("Creating room {}", name)
+    println("hello")
     room.init()
     rooms.add(room)
 }
 
 class Room(val name: String) {
 
-    private val devices = Devices()
+    internal val devices = Devices()
 
-    private val rules = Rules()
+    internal val rules = Rules()
 
     fun devices(init: Devices.() -> Unit) {
         log.debug("Defining devices")
@@ -32,7 +39,7 @@ class Room(val name: String) {
 
 class Devices() {
 
-    private val wsPresenceSensors: MutableList<WebSocketPresenceSensor> = mutableListOf()
+    internal val wsPresenceSensors: MutableList<WebSocketPresenceSensor> = mutableListOf()
 
     fun wsPresence(init: WebSocketPresenceSensor.() -> Unit) {
         val sensor = WebSocketPresenceSensor()
@@ -48,7 +55,7 @@ class WebSocketPresenceSensor() {
 
 class Rules() {
 
-    private val rules: MutableList<Rule> = mutableListOf()
+    internal val rules: MutableList<Rule> = mutableListOf()
 
     fun rule(description: String, init: Rule.() -> Unit) {
         val rule = Rule(description)
@@ -57,4 +64,34 @@ class Rules() {
     }
 }
 
-class Rule(description: String)
+class Rule(description: String) {
+
+    var whenever = Condition()
+
+//    lateinit var action: Action
+
+//    fun perform(init: Action.() -> Unit) {
+//        action = Action()
+//        action.init()
+//    }
+}
+
+class Condition() {
+
+    infix fun presenceIn(area: String): PresenceCondition {
+        return PresenceCondition(area)
+    }
+}
+
+class PresenceCondition(area: String) {
+
+    private var extendedFor: Duration? = null
+
+    infix fun extends(duration: Duration): PresenceCondition {
+        extendedFor = duration
+        print(duration)
+        return this
+    }
+}
+
+class Action()

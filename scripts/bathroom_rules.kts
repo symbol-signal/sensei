@@ -2,12 +2,12 @@
 
 import symsig.sensei.*
 
-devices {
+/*devices {
     shellyPro2PMDimmer {
         name = "bathroom dimmer"
         url = "xxx"
     }
-}
+}*/
 
 room("Bathroom") {
     devices {
@@ -15,15 +15,15 @@ room("Bathroom") {
     }
 
     rules {
-        lights("bathroom dimmer#ch02") {
+        /*lights("bathroom dimmer#ch02") {
             keepOn {
                 presenceIn "bathroom" extends 5.seconds
             }
-        }
+        }*/
 
         rule("turn on light in bathroom when someone is there") {
             whenever presenceIn "bathroom" extends 5.seconds
-            perform light("bathroom dimmer#ch02") keepOn
+//            perform lights "bathroom dimmer#ch02" keepOn
         }
     }
 }
