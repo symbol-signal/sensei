@@ -67,7 +67,10 @@ class RuleBuilder(private val room: Room) {
 
 class Rule(val description: String) {
 
-    var whenever = Condition()
+    lateinit var condition: PresenceCondition
+        internal set
+
+    val whenever = ConditionFactory(this)
 
 //    lateinit var action: Action
 
@@ -77,16 +80,16 @@ class Rule(val description: String) {
 //    }
 }
 
-class Condition() {
+class ConditionFactory(private val rule: Rule) {
 
     infix fun presenceIn(area: String): PresenceCondition {
-        return PresenceCondition(area)
+        return PresenceCondition(area).also { rule.condition = it }
     }
 }
 
 class PresenceCondition(area: String) {
 
-    private var extendedFor: Duration? = null
+    internal var extendedFor: Duration? = null
 
     infix fun extends(duration: Duration): PresenceCondition {
         extendedFor = duration

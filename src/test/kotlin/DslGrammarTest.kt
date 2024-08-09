@@ -11,6 +11,11 @@ class DslGrammarTest : StringSpec({
         rooms.clear()
     }
 
+    "seconds extension property should work correctly" {
+        val duration = 5.seconds
+        duration.inWholeSeconds shouldBe 5
+    }
+
     "should create a room" {
         room("Living Room") {}
 
@@ -31,7 +36,7 @@ class DslGrammarTest : StringSpec({
         rooms[0].devices.wsPresenceSensors[0].sensorId shouldBe "ws001"
     }
 
-    "should create a rule in a room" {
+    "should create a rule in a room with correct condition" {
         room("Kitchen") {
             rules {
                 rule("Test Rule") {
@@ -40,9 +45,10 @@ class DslGrammarTest : StringSpec({
             }
         }
 
-        rooms[0].rules.size shouldBe 1
-        rooms[0].rules[0].shouldBeInstanceOf<Rule>()
-        rooms[0].rules[0].whenever.shouldBeInstanceOf<Condition>()
+        val createdRule = rooms[0].rules[0]
+        createdRule.description shouldBe "Test Rule"
+//            createdRule.condition.area shouldBe "Kitchen"
+        createdRule.condition.extendedFor shouldBe 5.seconds
     }
 
     "should create multiple rooms" {
@@ -52,10 +58,5 @@ class DslGrammarTest : StringSpec({
 
         rooms.size shouldBe 3
         rooms.map { it.name } shouldContainExactly listOf("Living Room", "Bedroom", "Kitchen")
-    }
-
-    "seconds extension property should work correctly" {
-        val duration = 5.seconds
-        duration.inWholeSeconds shouldBe 5
     }
 })
