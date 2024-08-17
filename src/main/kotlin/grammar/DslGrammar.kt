@@ -1,6 +1,7 @@
 package symsig.sensei.grammar
 
 import org.slf4j.LoggerFactory
+import symsig.sensei.RoomRegistry
 import kotlin.time.DurationUnit
 import kotlin.time.toDuration
 
@@ -9,13 +10,11 @@ private val log = LoggerFactory.getLogger("symsig.sensei")
 val Int.seconds
     get() = this.toDuration(DurationUnit.SECONDS)
 
-val rooms: MutableList<Room> = mutableListOf()
-
 fun room(name: String, init: Room.() -> Unit) {
     val room = Room(name)
     log.debug("Creating room {}", name)
     room.init()
-    rooms.add(room)
+    RoomRegistry.addRoom(room)
 }
 
 class Room(val name: String) {
