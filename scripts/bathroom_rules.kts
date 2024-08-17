@@ -12,6 +12,7 @@ import symsig.sensei.*
 room("Bathroom") {
     devices {
         wsPresence { sensorId = "sen0395/bathroom" }
+        presence websocket { sensorId = "sen0395/bathroom" }
     }
 
     rules {

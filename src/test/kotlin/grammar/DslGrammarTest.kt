@@ -1,8 +1,6 @@
 package symsig.sensei.grammar
 
 import io.kotest.core.spec.style.StringSpec
-import io.kotest.matchers.collections.shouldContain
-import io.kotest.matchers.collections.shouldContainExactly
 import io.kotest.matchers.collections.shouldContainExactlyInAnyOrder
 import io.kotest.matchers.shouldBe
 import symsig.sensei.RoomRegistry
@@ -27,9 +25,7 @@ class DslGrammarTest : StringSpec({
     "should create a device in a room" {
         room("Bedroom") {
             devices {
-                wsPresence {
-                    sensorId = "ws001"
-                }
+                presence websocket { sensorId = "ws001" }
             }
         }
 

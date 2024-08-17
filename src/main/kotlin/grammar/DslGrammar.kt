@@ -23,9 +23,9 @@ class Room(val name: String) {
 
     internal val rules = Rules()
 
-    fun devices(init: Devices.() -> Unit) {
+    fun devices(init: DevicesBuilder.() -> Unit) {
         log.debug("Defining devices")
-        devices.init()
+        DevicesBuilder(devices).init()
     }
 
     fun rules(init: Rules.() -> Unit) {
@@ -34,19 +34,29 @@ class Room(val name: String) {
     }
 }
 
+class DevicesBuilder(val devices: Devices) {
+
+    val presence = PresenceSensorsFactory(devices)
+}
+
+
 class Devices() {
 
     internal val wsPresenceSensors: MutableList<WebSocketPresenceSensor> = mutableListOf()
+}
 
-    fun wsPresence(init: WebSocketPresenceSensor.() -> Unit) {
+class PresenceSensorsFactory(val devices: Devices) {
+
+    infix fun websocket(init: WebSocketPresenceSensor.() -> Unit) {
         val sensor = WebSocketPresenceSensor()
         sensor.init()
-        log.debug("Created {} sensor", sensor.sensorId)
-        wsPresenceSensors.add(sensor)
+        devices.wsPresenceSensors.add(sensor)
     }
 }
 
+
 class WebSocketPresenceSensor() {
+
     var sensorId: String = ""
 }
 
