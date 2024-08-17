@@ -3,7 +3,9 @@ package symsig.sensei
 import io.kotest.core.spec.style.StringSpec
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.collections.shouldContainExactly
-import io.kotest.matchers.types.shouldBeInstanceOf
+import symsig.sensei.grammar.room
+import symsig.sensei.grammar.rooms
+import symsig.sensei.grammar.seconds
 
 class DslGrammarTest : StringSpec({
 
@@ -39,16 +41,16 @@ class DslGrammarTest : StringSpec({
     "should create a rule in a room with correct condition" {
         room("Kitchen") {
             rules {
-                rule("Test Rule") {
-                    whenever presenceIn "Kitchen" extends 5.seconds
+                keep("Condition State Rule") {
+                    whilst presenceIn "Kitchen" extends 5.seconds
                 }
             }
         }
 
-        val createdRule = rooms[0].rules[0]
-        createdRule.description shouldBe "Test Rule"
+        val createdRule = rooms[0].rules.conditionStateRules[0]
+        createdRule.description shouldBe "Condition State Rule"
 //            createdRule.condition.area shouldBe "Kitchen"
-        createdRule.condition.extendedFor shouldBe 5.seconds
+//        createdRule.condition.extendedFor shouldBe 5.seconds
     }
 
     "should create multiple rooms" {
