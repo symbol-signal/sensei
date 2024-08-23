@@ -7,18 +7,27 @@ plugins {
 group = "symsig"
 version = "0.1.0-SNAPSHOT"
 
-val ktor_version = "2.3.12"
+val ktorVersion = "2.3.12"
 
 repositories {
     mavenCentral()
 }
 
 dependencies {
+    // Logging
     implementation("ch.qos.logback:logback-classic:1.5.6")
-    implementation("io.ktor:ktor-server-core:$ktor_version")
-    implementation("io.ktor:ktor-server-netty:$ktor_version")
-    implementation("io.ktor:ktor-server-websockets:$ktor_version")
+    implementation("io.github.oshai:kotlin-logging-jvm:7.0.0")
 
+    // Ktor framework for Websocket server
+    implementation("io.ktor:ktor-server-core:$ktorVersion")
+    implementation("io.ktor:ktor-server-netty:$ktorVersion")
+    implementation("io.ktor:ktor-server-websockets:$ktorVersion")
+
+    // Ktor JSON deserialization
+    implementation("io.ktor:ktor-serialization-kotlinx-json:$ktorVersion")
+    implementation("io.github.nomisrev:kotlinx-serialization-jsonpath:1.0.0")
+
+    // Testing
     testImplementation("io.kotest:kotest-runner-junit5:5.9.1")
 }
 
