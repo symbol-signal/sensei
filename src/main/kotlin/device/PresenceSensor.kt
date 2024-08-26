@@ -1,20 +1,30 @@
-package symsig.sensei.device
-
 import io.github.oshai.kotlinlogging.KotlinLogging
 import kotlinx.serialization.json.JsonObject
 import symsig.sensei.`interface`.JsonMessage
 import symsig.sensei.util.json.jsonPathExtractor
+import java.time.Instant
+import java.util.concurrent.CopyOnWriteArrayList
 
 private val log = KotlinLogging.logger {}
 
+data class PresenceChangeEvent(
+    val presence: Boolean,
+    val eventAt: Instant?,
+)
+
 class PresenceSensor(
     val sensorId: String,
-    private val sensorIdExtractor: (JsonObject) -> String? = jsonPathExtractor(JsonPaths.SENSOR_ID),
-    private val presenceExtractor: (JsonObject) -> Boolean? = jsonPathExtractor(JsonPaths.PRESENCE),
-    private val timestampExtractor: ((JsonObject) -> String?)? = jsonPathExtractor(JsonPaths.TIMESTAMP)
+    private val sensorIdExtractor: (JsonObject) -> String?,
+    private val presenceExtractor: (JsonObject) -> Boolean?,
+    private val timestampExtractor: ((JsonObject) -> Instant?)? = null
 ) {
     var presence: Boolean = false
         private set
+
+    var lastChanged: Instant? = null
+        private set
+
+    private val listeners = CopyOnWriteArrayList<(PresenceChangeEvent) -> Unit>()
 
     fun messageReceived(jsonMessage: JsonMessage) {
         val messageBody: JsonObject = jsonMessage.payload
@@ -27,26 +37,46 @@ class PresenceSensor(
             return
         }
 
+        if (presence == presenceValue) return
+
+        presence = presenceValue
+
         val timestamp = timestampExtractor?.invoke(messageBody)
+        lastChanged = timestamp
         if (timestamp == null && timestampExtractor != null) {
             log.warn { "[missing_value] sensor=[$sensorId] value=[timestamp] message=[$messageBody]" }
         }
 
-        if (presence != presenceValue) {
-            presenceChanged(presenceValue)
+        notifyListeners(PresenceChangeEvent(presenceValue, timestamp))
+    }
+
+    private fun notifyListeners(event: PresenceChangeEvent) {
+        for (listener in listeners) {
+            try {
+                listener(event)
+            } catch (e: Exception) {
+                log.error(e) { "[listener_error] sensor=[$sensorId] listener=[$listener]" }
+            }
         }
     }
 
-    private fun presenceChanged(newPresence: Boolean) {
-        presence = newPresence
-        // Implement additional logic when presence changes, if necessary
+    fun addListener(listener: (PresenceChangeEvent) -> Unit) {
+        listeners.add(listener)
     }
 
-    companion object {
-        object JsonPaths {
-            const val SENSOR_ID = "sensorId"
-            const val PRESENCE = "eventData.presence"
-            const val TIMESTAMP = "eventAt"
-        }
+    fun removeListener(listener: (PresenceChangeEvent) -> Unit) {
+        listeners.remove(listener)
+    }
+}
+
+object PresenceSensors {
+
+    fun sensord(sensorId: String): PresenceSensor {
+        return PresenceSensor(
+            sensorId = sensorId,
+            sensorIdExtractor = jsonPathExtractor("sensorId"),
+            presenceExtractor = jsonPathExtractor("eventData.presence"),
+            timestampExtractor = jsonPathExtractor("eventAt")
+        )
     }
 }
