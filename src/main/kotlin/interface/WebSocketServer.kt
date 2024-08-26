@@ -10,11 +10,17 @@ import io.ktor.websocket.*
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.jsonObject
+import java.time.Instant
 import java.util.concurrent.CopyOnWriteArrayList
 
 private val logger = KotlinLogging.logger {}
 
-typealias WebSocketMessageHandler = suspend (JsonObject) -> Unit
+data class JsonMessage(
+    val payload: JsonObject,
+    val timestamp: Instant = Instant.now(),
+)
+
+typealias WebSocketMessageHandler = (JsonMessage) -> Unit
 
 class WebSocketServer(port: Int) {
 
@@ -28,9 +34,10 @@ class WebSocketServer(port: Int) {
                     frame as? Frame.Text ?: continue
                     val receivedText = frame.readText()
                     val jsonObject = Json.parseToJsonElement(receivedText).jsonObject
+                    val wsMessage = JsonMessage(jsonObject)
                     sensorHandlers.forEach { handler ->
                         try {
-                            handler(jsonObject)
+                            handler(wsMessage)
                         } catch (e: Exception) {
                             logger.error(e) {"[sensor_handler_error] handler=[$handler]"}
                         }
