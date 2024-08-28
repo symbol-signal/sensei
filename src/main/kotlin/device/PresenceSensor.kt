@@ -4,14 +4,37 @@ import io.github.oshai.kotlinlogging.KotlinLogging
 import kotlinx.serialization.json.JsonObject
 import symsig.sensei.`interface`.JsonMessage
 import symsig.sensei.util.json.jsonPathExtractor
+import symsig.sensei.util.json.jsonPathExtractorAny
+import symsig.sensei.util.misc.interpretAsBoolean
 import java.time.Instant
 import java.util.concurrent.CopyOnWriteArrayList
 
 private val log = KotlinLogging.logger {}
 
+enum class Presence {
+
+    PRESENT, ABSENT, UNKNOWN;
+
+    companion object {
+
+        fun parseAsBoolean(value: Boolean?): Presence {
+            return when (value) {
+                true -> PRESENT
+                false -> ABSENT
+                null -> UNKNOWN
+            }
+        }
+
+        fun parseValue(value: Any?): Presence {
+            return parseAsBoolean(interpretAsBoolean(value))
+        }
+    }
+}
+
+
 data class PresenceChangeEvent(
     val sensorId: String,
-    val presence: Boolean,
+    val presence: Presence,
     val changedAt: Instant,
 )
 
@@ -32,7 +55,7 @@ class UpdateRequestNotAvailableException(sensorId: String) :
 interface PresenceSensor {
 
     val sensorId: String
-    val presence: Boolean? // TODO should be enum or sealed class?
+    val presence: Presence
     val lastChanged: Instant?
 
     fun addListener(listener: (PresenceChangeEvent) -> Unit)
@@ -43,7 +66,7 @@ interface PresenceSensorMessageDriven : PresenceSensor, MessageDriven
 
 abstract class AbstractPresenceSensor : PresenceSensor {
 
-    override var presence: Boolean? = null
+    override var presence: Presence = Presence.UNKNOWN
         protected set
 
     override var lastChanged: Instant? = null
@@ -51,7 +74,7 @@ abstract class AbstractPresenceSensor : PresenceSensor {
 
     private val listeners = CopyOnWriteArrayList<(PresenceChangeEvent) -> Unit>()
 
-    fun newUpdate(newPresence: Boolean, updatedAt: Instant) {
+    fun newUpdate(newPresence: Presence, updatedAt: Instant) {
         if (newPresence == presence) return
 
         presence = newPresence
@@ -81,7 +104,7 @@ abstract class AbstractPresenceSensor : PresenceSensor {
 
 data class PresenceSensorMessage(
     val sensorId: String,
-    val presence: Boolean,
+    val presence: Presence,
     val changedAt: Instant,
 )
 
@@ -94,7 +117,7 @@ class PresenceSensorJsonPathMessageProcessor(
 ) {
 
     private var sensorIdExtractor = jsonPathExtractor<String>(sensorIdPath)
-    private var presenceExtractor = jsonPathExtractor<Boolean>(presencePath)
+    private var presenceExtractor = jsonPathExtractorAny(presencePath)
     private var timestampExtractor = timestampPath?.let { jsonPathExtractor<Instant>(it) }
 
     operator fun invoke(sensorMessage: JsonMessage): PresenceSensorMessage? {
@@ -115,7 +138,7 @@ class PresenceSensorJsonPathMessageProcessor(
             sensorMessage.timestamp
         }
 
-        return PresenceSensorMessage(sensorId, presenceValue, timestamp)
+        return PresenceSensorMessage(sensorId, Presence.parseValue(presenceValue), timestamp)
     }
 }
 
@@ -129,8 +152,7 @@ class PresenceSensorJson(override var sensorId: String, private var messageProce
             sensorMessage = messageProcessor(jsonMessage) ?: return
         } catch (e: MissingPresenceEventJsonFieldException) {
             if (e.sensorId == sensorId) {
-                // Implement logging or handle the exception
-                TODO("Implement logging")
+                log.warn { "[invalid_sensor_payload] sensor=[${e.sensorId}] missing_field=[${e.field}] payload=[$jsonMessage]" }
             }
             return
         }
@@ -146,7 +168,10 @@ class PresenceSensorJson(override var sensorId: String, private var messageProce
 }
 
 
-object PresenceSensorJsonMessageProcessors {
+object PresenceSensors {
 
-    var sensord = PresenceSensorJsonPathMessageProcessor("sensorId", "eventData.presence", "eventAt")
+    fun sensord(sensorId: String): PresenceSensorMessageDriven {
+        val msgProcessor = PresenceSensorJsonPathMessageProcessor("sensorId", "eventData.presence", "eventAt")
+        return PresenceSensorJson(sensorId, msgProcessor::invoke)
+    }
 }
