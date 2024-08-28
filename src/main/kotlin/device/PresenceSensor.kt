@@ -15,6 +15,17 @@ data class PresenceChangeEvent(
     val changedAt: Instant,
 )
 
+// TODO Move to more generic class
+interface MessageDriven {
+
+    /**
+     * Requests an update from the sensor.
+     *
+     * @throws UpdateRequestNotAvailableException if the sensor cannot handle update requests.
+     */
+    fun requestUpdate()
+}
+
 class UpdateRequestNotAvailableException(sensorId: String) :
     Exception("Sensor $sensorId does not support requesting an update")
 
@@ -26,14 +37,9 @@ interface PresenceSensor {
 
     fun addListener(listener: (PresenceChangeEvent) -> Unit)
     fun removeListener(listener: (PresenceChangeEvent) -> Unit)
-
-    /**
-     * Requests an update from the sensor.
-     *
-     * @throws UpdateRequestNotAvailableException if the sensor cannot handle update requests.
-     */
-    fun requestUpdate()
 }
+
+interface PresenceSensorMessageDriven : PresenceSensor, MessageDriven
 
 abstract class AbstractPresenceSensor : PresenceSensor {
 
@@ -44,8 +50,6 @@ abstract class AbstractPresenceSensor : PresenceSensor {
         protected set
 
     private val listeners = CopyOnWriteArrayList<(PresenceChangeEvent) -> Unit>()
-
-    abstract override fun requestUpdate()
 
     fun newUpdate(newPresence: Boolean, updatedAt: Instant) {
         if (newPresence == presence) return
@@ -116,13 +120,13 @@ class PresenceSensorJsonPathMessageProcessor(
 }
 
 class PresenceSensorJson(override var sensorId: String, private var messageProcessor: (JsonMessage) -> PresenceSensorMessage?) :
-    AbstractPresenceSensor() {
+    AbstractPresenceSensor(), PresenceSensorMessageDriven {
 
     fun handleSensorJsonMessage(jsonMessage: JsonMessage) {
-        val presenceSensorMessage: PresenceSensorMessage?
+        val sensorMessage: PresenceSensorMessage?
 
         try {
-            presenceSensorMessage = messageProcessor(jsonMessage) ?: return
+            sensorMessage = messageProcessor(jsonMessage) ?: return
         } catch (e: MissingPresenceEventJsonFieldException) {
             if (e.sensorId == sensorId) {
                 // Implement logging or handle the exception
@@ -131,9 +135,9 @@ class PresenceSensorJson(override var sensorId: String, private var messageProce
             return
         }
 
-        if (presenceSensorMessage.sensorId != sensorId) return
+        if (sensorMessage.sensorId != sensorId) return
 
-        newUpdate(presenceSensorMessage.presence, presenceSensorMessage.changedAt)
+        newUpdate(sensorMessage.presence, sensorMessage.changedAt)
     }
 
     override fun requestUpdate() {
