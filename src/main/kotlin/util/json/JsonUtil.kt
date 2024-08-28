@@ -1,10 +1,7 @@
 package symsig.sensei.util.json
 
-import io.github.nomisrev.JsonPath
-import io.github.nomisrev.boolean
-import io.github.nomisrev.path
-import io.github.nomisrev.string
-import kotlinx.serialization.json.JsonObject
+import io.github.nomisrev.*
+import kotlinx.serialization.json.*
 import java.time.Instant
 import java.time.LocalDateTime
 import java.time.format.DateTimeFormatter
@@ -16,6 +13,10 @@ inline fun <reified T> jsonPathExtractor(jsonPath: String): (JsonObject) -> T? {
             val value = when (T::class) {
                 String::class -> it.string.getOrNull(json) as? T
                 Boolean::class -> it.boolean.getOrNull(json) as? T
+                Int::class -> it.int.getOrNull(json) as? T
+                Long::class -> it.long.getOrNull(json) as? T
+                Float::class -> it.float.getOrNull(json) as? T
+                Double::class -> it.double.getOrNull(json) as? T
                 LocalDateTime::class -> it.string.getOrNull(json)?.let { dateStr ->
                     try {
                         LocalDateTime.parse(dateStr, DateTimeFormatter.ISO_DATE_TIME) as? T
@@ -36,3 +37,23 @@ inline fun <reified T> jsonPathExtractor(jsonPath: String): (JsonObject) -> T? {
         }
     }
 }
+
+fun jsonPathExtractorAny(jsonPath: String): (JsonObject) -> Any? {
+    return { json: JsonObject ->
+        JsonPath.path(jsonPath).getOrNull(json)?.let { element ->
+            when (val primitive = element as? JsonPrimitive) {
+                is JsonPrimitive -> when {
+                    primitive.isString -> primitive.content
+                    primitive.booleanOrNull != null -> primitive.boolean
+                    primitive.intOrNull != null -> primitive.int
+                    primitive.longOrNull != null -> primitive.long
+                    primitive.floatOrNull != null -> primitive.float
+                    primitive.doubleOrNull != null -> primitive.double
+                    else -> primitive.content
+                }
+                else -> element // Return the element itself if not a primitive
+            }
+        }
+    }
+}
+
