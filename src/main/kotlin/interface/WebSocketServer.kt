@@ -24,24 +24,30 @@ typealias WebSocketMessageHandler = (JsonMessage) -> Unit
 
 class WebSocketServer(port: Int) {
 
-    private val sensorHandlers: CopyOnWriteArrayList<WebSocketMessageHandler> = CopyOnWriteArrayList()
+    private val presenceSensorHandlers: CopyOnWriteArrayList<WebSocketMessageHandler> = CopyOnWriteArrayList()
+    private val presenceSensorClients: CopyOnWriteArrayList<DefaultWebSocketSession> = CopyOnWriteArrayList()
 
     private val server: NettyApplicationEngine = embeddedServer(Netty, port = port) {
         install(WebSockets)
         routing {
-            webSocket("/sensor") {
-                for (frame in incoming) {
-                    frame as? Frame.Text ?: continue
-                    val receivedText = frame.readText()
-                    val jsonObject = Json.parseToJsonElement(receivedText).jsonObject
-                    val wsMessage = JsonMessage(jsonObject)
-                    sensorHandlers.forEach { handler ->
-                        try {
-                            handler(wsMessage)
-                        } catch (e: Exception) {
-                            logger.error(e) {"[sensor_handler_error] handler=[$handler]"}
+            webSocket("/sensor/presence") {
+                presenceSensorClients += this
+                try {
+                    for (frame in incoming) {
+                        frame as? Frame.Text ?: continue
+                        val receivedText = frame.readText()
+                        val jsonObject = Json.parseToJsonElement(receivedText).jsonObject
+                        val wsMessage = JsonMessage(jsonObject)
+                        presenceSensorHandlers.forEach { handler ->
+                            try {
+                                handler(wsMessage)
+                            } catch (e: Exception) {
+                                logger.error(e) {"[sensor_handler_error] handler=[$handler]"}
+                            }
                         }
                     }
+                } finally {
+                    presenceSensorClients -= this
                 }
             }
         }
@@ -51,11 +57,26 @@ class WebSocketServer(port: Int) {
         server.start(wait)
     }
 
-    fun addSensorMessageHandler(handler: WebSocketMessageHandler) {
-        sensorHandlers.add(handler)
-    }
-
     fun stop(gracePeriodMillis: Long, timeoutMillis: Long) {
         server.stop(gracePeriodMillis, timeoutMillis)
     }
+
+    fun addSensorMessageHandler(handler: WebSocketMessageHandler) {
+        presenceSensorHandlers += handler
+    }
+
+    fun removeSensorMessageHandler(handler: WebSocketMessageHandler) {
+        presenceSensorHandlers -= handler
+    }
+
+    suspend fun sendMessageToPresenceSensors(message: JsonObject) {
+        presenceSensorClients.forEach { client ->
+            try {
+                client.send(Frame.Text(message.toString()))
+            } catch (e: Exception) {
+                logger.error(e) { "[send_sensor_message_error] sensor_client=[$client] message=[$message]" }
+            }
+        }
+    }
 }
+
