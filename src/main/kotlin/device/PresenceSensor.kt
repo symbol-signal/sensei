@@ -170,9 +170,10 @@ object PresenceSensors {
     fun sensord(
         sensorId: String,
         sensorMessageSender: (JsonObject) -> Unit
-    ): PresenceSensorUpdatable {
+    ): PresenceSensorJsonUpdatable {
         val msgProcessor = PresenceSensorJsonPathMessageProcessor("sensorId", "eventData.presence", "eventAt")
-        return PresenceSensorJsonUpdatable(sensorId, msgProcessor::invoke, UpdateRequestBuilders.sensord().andThen(sensorMessageSender))
+        val updateRequestHandler: (String) -> Unit = UpdateRequestBuilders.sensord().andThen(sensorMessageSender)
+        return PresenceSensorJsonUpdatable(sensorId, msgProcessor::invoke, updateRequestHandler)
     }
 }
 

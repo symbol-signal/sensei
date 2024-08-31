@@ -7,6 +7,9 @@ import io.ktor.server.netty.*
 import io.ktor.server.routing.*
 import io.ktor.server.websocket.*
 import io.ktor.websocket.*
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.jsonObject
@@ -26,6 +29,7 @@ class WebSocketServer(port: Int) {
 
     private val presenceSensorHandlers: CopyOnWriteArrayList<WebSocketMessageHandler> = CopyOnWriteArrayList()
     private val presenceSensorClients: CopyOnWriteArrayList<DefaultWebSocketSession> = CopyOnWriteArrayList()
+    private val coroutineScope = CoroutineScope(Dispatchers.Default)
 
     private val server: NettyApplicationEngine = embeddedServer(Netty, port = port) {
         install(WebSockets)
@@ -69,8 +73,14 @@ class WebSocketServer(port: Int) {
         presenceSensorHandlers -= handler
     }
 
-    suspend fun sendMessageToPresenceSensors(message: JsonObject) {
+    fun sendMessageToPresenceSensors(message: JsonObject) {
         presenceSensorClients.forEach { client ->
+            launchMessageSendingCoroutine(client, message)
+        }
+    }
+
+    private fun launchMessageSendingCoroutine(client: DefaultWebSocketSession, message: JsonObject) {
+        coroutineScope.launch {
             try {
                 client.send(Frame.Text(message.toString()))
             } catch (e: Exception) {
