@@ -35,31 +35,11 @@ enum class Presence {
     }
 }
 
-
 data class PresenceChangeEvent(
     val sensorId: String,
     val presence: Presence,
     val changedAt: Instant,
 )
-
-// TODO --- Move the two below to more generic class ---
-
-interface MessageDriven<M> {
-
-    fun newUpdate(message: M)
-}
-
-interface Updatable {
-
-    /**
-     * Requests an update from the sensor.
-     *
-     * @throws UpdateRequestNotAvailableException if the sensor cannot handle update requests.
-     */
-    fun requestUpdate()
-}
-
-// TODO --- Move the two above to more generic class ---
 
 interface PresenceSensor {
 
@@ -71,12 +51,12 @@ interface PresenceSensor {
     fun removeListener(listener: (PresenceChangeEvent) -> Unit)
 }
 
-interface PresenceSensorMessageDriven<M> : PresenceSensor, MessageDriven<M>
+interface PresenceSensorUpdatable : PresenceSensor {
 
-interface PresenceSensorMessageUpdatable<M> : PresenceSensorMessageDriven<M>, Updatable
+    fun requestUpdate()
+}
 
-open class PresenceSensorMessageDrivenObservable(override val sensorId: String) :
-    PresenceSensorMessageDriven<PresenceChangeEvent> {
+open class PresenceSensorEventDriven(override val sensorId: String) : PresenceSensor {
 
     override var presence: Presence = Presence.UNKNOWN
         protected set
@@ -86,7 +66,7 @@ open class PresenceSensorMessageDrivenObservable(override val sensorId: String) 
 
     private val listeners = CopyOnWriteArrayList<(PresenceChangeEvent) -> Unit>()
 
-    override fun newUpdate(message: PresenceChangeEvent) {
+    fun newUpdate(message: PresenceChangeEvent) {
         if (message.sensorId != sensorId) {
             throw IllegalArgumentException("Sensor ID mismatch: expected [$sensorId], but got [${message.sensorId}]")
         }
@@ -121,15 +101,15 @@ open class PresenceSensorMessageDrivenObservable(override val sensorId: String) 
     }
 }
 
-class MissingPresenceEventJsonFieldException(var sensorId: String, var field: String) : Exception()
+class MissingPresenceEventJsonFieldException(val sensorId: String, val field: String) : Exception()
 
 class PresenceSensorJsonPathMessageProcessor(
     sensorIdPath: String, presencePath: String, timestampPath: String? = null
 ) {
 
-    private var sensorIdExtractor = jsonPathExtractor<String>(sensorIdPath)
-    private var presenceExtractor = jsonPathExtractorAny(presencePath)
-    private var timestampExtractor = timestampPath?.let { jsonPathExtractor<Instant>(it) }
+    private val sensorIdExtractor = jsonPathExtractor<String>(sensorIdPath)
+    private val presenceExtractor = jsonPathExtractorAny(presencePath)
+    private val timestampExtractor = timestampPath?.let { jsonPathExtractor<Instant>(it) }
 
     operator fun invoke(sensorMessage: JsonMessage): PresenceChangeEvent? {
         val messageBody: JsonObject = sensorMessage.payload
@@ -152,9 +132,10 @@ class PresenceSensorJsonPathMessageProcessor(
     }
 }
 
-open class PresenceSensorJson(override var sensorId: String,
-                              private var messageProcessor: (JsonMessage) -> PresenceChangeEvent?,
-) : PresenceSensorMessageDrivenObservable(sensorId), PresenceSensorMessageDriven<PresenceChangeEvent> {
+open class PresenceSensorJson(
+    override val sensorId: String,
+    private val messageProcessor: (JsonMessage) -> PresenceChangeEvent?,
+) : PresenceSensorEventDriven(sensorId) {
 
     fun handleSensorJsonMessage(jsonMessage: JsonMessage) {
         val sensorEvent: PresenceChangeEvent?
@@ -176,21 +157,20 @@ open class PresenceSensorJson(override var sensorId: String,
 
 open class PresenceSensorJsonUpdatable(sensorId: String,
                                        messageProcessor: (JsonMessage) -> PresenceChangeEvent?,
-                                       private var updateRequestHandler: (String) -> Unit,
-) : PresenceSensorJson(sensorId, messageProcessor), PresenceSensorMessageUpdatable<PresenceChangeEvent> {
+                                       private val updateRequestHandler: (String) -> Unit,
+) : PresenceSensorJson(sensorId, messageProcessor), PresenceSensorUpdatable {
 
     override fun requestUpdate() {
         updateRequestHandler(sensorId)
     }
 }
 
-
 object PresenceSensors {
 
     fun sensord(
         sensorId: String,
         sensorMessageSender: (JsonObject) -> Unit
-    ): PresenceSensorMessageUpdatable<PresenceChangeEvent> {
+    ): PresenceSensorUpdatable {
         val msgProcessor = PresenceSensorJsonPathMessageProcessor("sensorId", "eventData.presence", "eventAt")
         return PresenceSensorJsonUpdatable(sensorId, msgProcessor::invoke, UpdateRequestBuilders.sensord().andThen(sensorMessageSender))
     }
