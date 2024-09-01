@@ -18,10 +18,14 @@ dependencies {
     implementation("ch.qos.logback:logback-classic:1.5.6")
     implementation("io.github.oshai:kotlin-logging-jvm:7.0.0")
 
-    // Ktor framework for Websocket server
+    // Ktor framework for..
     implementation("io.ktor:ktor-server-core:$ktorVersion")
     implementation("io.ktor:ktor-server-netty:$ktorVersion")
+    // .. Websocket server
     implementation("io.ktor:ktor-server-websockets:$ktorVersion")
+    // .. HTTP client
+    implementation("io.ktor:ktor-client:$ktorVersion")
+    implementation("io.ktor:ktor-client-cio:$ktorVersion")
 
     // Ktor JSON deserialization
     implementation("io.ktor:ktor-serialization-kotlinx-json:$ktorVersion")
