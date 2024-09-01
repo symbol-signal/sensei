@@ -5,6 +5,7 @@ import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonObject
 import symsig.sensei.`interface`.JsonMessage
+import symsig.sensei.`interface`.PresenceSensorRemoteMessaging
 import symsig.sensei.util.json.jsonPathExtractor
 import symsig.sensei.util.json.jsonPathExtractorAny
 import symsig.sensei.util.misc.andThen
@@ -169,11 +170,14 @@ object PresenceSensors {
 
     fun sensord(
         sensorId: String,
-        sensorMessageSender: (JsonObject) -> Unit
+        remoteMessaging: PresenceSensorRemoteMessaging
     ): PresenceSensorJsonUpdatable {
         val msgProcessor = PresenceSensorJsonPathMessageProcessor("sensorId", "eventData.presence", "eventAt")
-        val updateRequestHandler: (String) -> Unit = UpdateRequestBuilders.sensord().andThen(sensorMessageSender)
-        return PresenceSensorJsonUpdatable(sensorId, msgProcessor::invoke, updateRequestHandler)
+        val updateRequestHandler = UpdateRequestBuilders.sensord().andThen(remoteMessaging::sendMessageToPresenceSensors)
+
+        return PresenceSensorJsonUpdatable(sensorId, msgProcessor::invoke, updateRequestHandler).apply {
+            remoteMessaging.addPresenceSensorMessageHandler(::handleSensorJsonMessage)
+        }
     }
 }
 

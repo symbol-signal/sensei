@@ -18,6 +18,13 @@ import java.util.concurrent.CopyOnWriteArrayList
 
 private val logger = KotlinLogging.logger {}
 
+interface PresenceSensorRemoteMessaging {
+
+    fun sendMessageToPresenceSensors(message: JsonObject)
+    fun addPresenceSensorMessageHandler(handler: WebSocketMessageHandler)
+    fun removePresenceSensorMessageHandler(handler: WebSocketMessageHandler)
+}
+
 data class JsonMessage(
     val payload: JsonObject,
     val timestamp: Instant = Instant.now(),
@@ -25,7 +32,7 @@ data class JsonMessage(
 
 typealias WebSocketMessageHandler = (JsonMessage) -> Unit
 
-class WebSocketServer(port: Int) {
+class WebSocketServer(port: Int) : PresenceSensorRemoteMessaging {
 
     private val presenceSensorHandlers: CopyOnWriteArrayList<WebSocketMessageHandler> = CopyOnWriteArrayList()
     private val presenceSensorClients: CopyOnWriteArrayList<DefaultWebSocketSession> = CopyOnWriteArrayList()
@@ -57,7 +64,7 @@ class WebSocketServer(port: Int) {
         }
     }
 
-    fun start(wait: Boolean) {
+    fun start(wait: Boolean = true) {
         server.start(wait)
     }
 
@@ -65,15 +72,15 @@ class WebSocketServer(port: Int) {
         server.stop(gracePeriodMillis, timeoutMillis)
     }
 
-    fun addSensorMessageHandler(handler: WebSocketMessageHandler) {
+    override fun addPresenceSensorMessageHandler(handler: WebSocketMessageHandler) {
         presenceSensorHandlers += handler
     }
 
-    fun removeSensorMessageHandler(handler: WebSocketMessageHandler) {
+    override fun removePresenceSensorMessageHandler(handler: WebSocketMessageHandler) {
         presenceSensorHandlers -= handler
     }
 
-    fun sendMessageToPresenceSensors(message: JsonObject) {
+    override fun sendMessageToPresenceSensors(message: JsonObject) {
         presenceSensorClients.forEach { client ->
             launchMessageSendingCoroutine(client, message)
         }
