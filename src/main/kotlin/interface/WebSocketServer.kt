@@ -19,7 +19,6 @@ import java.util.concurrent.CopyOnWriteArrayList
 private val logger = KotlinLogging.logger {}
 
 interface PresenceSensorRemoteMessaging {
-
     fun sendMessageToPresenceSensors(message: JsonObject)
     fun addPresenceSensorMessageHandler(handler: WebSocketMessageHandler)
     fun removePresenceSensorMessageHandler(handler: WebSocketMessageHandler)
@@ -32,14 +31,19 @@ data class JsonMessage(
 
 typealias WebSocketMessageHandler = (JsonMessage) -> Unit
 
-class WebSocketServer(port: Int) : PresenceSensorRemoteMessaging {
-
+class WebSocketServer(private val port: Int) : PresenceSensorRemoteMessaging {
     private val presenceSensorHandlers: CopyOnWriteArrayList<WebSocketMessageHandler> = CopyOnWriteArrayList()
     private val presenceSensorClients: CopyOnWriteArrayList<DefaultWebSocketSession> = CopyOnWriteArrayList()
     private val coroutineScope = CoroutineScope(Dispatchers.Default)
 
-    private val server: NettyApplicationEngine = embeddedServer(Netty, port = port) {
+    private var server: NettyApplicationEngine? = null
+
+    fun Application.module() {
         install(WebSockets)
+        presenceSensorModule()
+    }
+
+    fun Application.presenceSensorModule() {
         routing {
             webSocket("/sensor/presence") {
                 presenceSensorClients += this
@@ -53,7 +57,7 @@ class WebSocketServer(port: Int) : PresenceSensorRemoteMessaging {
                             try {
                                 handler(wsMessage)
                             } catch (e: Exception) {
-                                logger.error(e) {"[sensor_handler_error] handler=[$handler]"}
+                                logger.error(e) { "[sensor_handler_error] handler=[$handler]" }
                             }
                         }
                     }
@@ -65,11 +69,15 @@ class WebSocketServer(port: Int) : PresenceSensorRemoteMessaging {
     }
 
     fun start(wait: Boolean = true) {
-        server.start(wait)
+        server = embeddedServer(Netty, port = port) {
+            module()
+        }.apply {
+            start(wait)
+        }
     }
 
     fun stop(gracePeriodMillis: Long, timeoutMillis: Long) {
-        server.stop(gracePeriodMillis, timeoutMillis)
+        server?.stop(gracePeriodMillis, timeoutMillis)
     }
 
     override fun addPresenceSensorMessageHandler(handler: WebSocketMessageHandler) {
@@ -96,4 +104,3 @@ class WebSocketServer(port: Int) : PresenceSensorRemoteMessaging {
         }
     }
 }
-
