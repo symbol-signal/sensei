@@ -4,24 +4,28 @@ import io.kotest.core.spec.style.StringSpec
 import io.kotest.matchers.shouldBe
 import io.ktor.client.plugins.websocket.*
 import io.ktor.server.testing.*
+import io.ktor.server.websocket.WebSockets
 import io.ktor.websocket.*
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.withTimeout
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.jsonPrimitive
 
 class WebSocketModuleTest : StringSpec({
 
-    "test WebSocket module" {
+    "test JSON deserialized and handler notified" {
         testApplication {
-            val messageChannel = Channel<String>()
+            install(WebSockets)
+
+            val messageChannel = Channel<JsonMessage>()
             val server = WebSocketServer(8080)
 
             application {
-//                install(WebSockets) // This is the server-side install
-                server.apply { module() }
+                server.apply { presenceSensorModule() }
             }
 
-            server.addPresenceSensorMessageHandler { message ->
-                messageChannel.trySend(message.payload.toString())
+            server.addPresenceSensorMessageHandler { message: JsonMessage ->
+                messageChannel.trySend(message)
             }
 
             val client = createClient {
@@ -29,13 +33,11 @@ class WebSocketModuleTest : StringSpec({
             }
 
             client.webSocket("/sensor/presence") {
-                // Send a message to the server
-                send(Frame.Text("Hello, Server!"))
+                send(Frame.Text("""{"sensorId": "sen1"}"""))
 
-                // Wait for the response
-                withTimeout(5000) {
-                    val response = messageChannel.receive()
-                    response shouldBe "Hello, Server!"
+                withTimeout(100) {
+                    val payload: JsonObject = messageChannel.receive().payload
+                    payload["sensorId"]?.jsonPrimitive?.content shouldBe "sen1"
                 }
             }
         }

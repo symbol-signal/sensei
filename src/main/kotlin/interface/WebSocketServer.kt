@@ -38,12 +38,12 @@ class WebSocketServer(private val port: Int) : PresenceSensorRemoteMessaging {
 
     private var server: NettyApplicationEngine? = null
 
-    fun Application.module() {
+    private fun Application.module() {
         install(WebSockets)
         presenceSensorModule()
     }
 
-    fun Application.presenceSensorModule() {
+    internal fun Application.presenceSensorModule() {
         routing {
             webSocket("/sensor/presence") {
                 presenceSensorClients += this
