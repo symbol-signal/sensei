@@ -6,10 +6,10 @@ import io.ktor.client.plugins.websocket.*
 import io.ktor.server.testing.*
 import io.ktor.server.websocket.WebSockets
 import io.ktor.websocket.*
+import kotlinx.coroutines.async
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.withTimeout
-import kotlinx.serialization.json.JsonObject
-import kotlinx.serialization.json.jsonPrimitive
+import kotlinx.serialization.json.*
 
 class WebSocketModuleTest : StringSpec({
 
@@ -39,6 +39,39 @@ class WebSocketModuleTest : StringSpec({
                     val payload: JsonObject = messageChannel.receive().payload
                     payload["sensorId"]?.jsonPrimitive?.content shouldBe "sen1"
                 }
+            }
+        }
+    }
+
+    "test sending message to connected clients" {
+        testApplication {
+            install(WebSockets)
+
+            val server = WebSocketServer(8080)
+
+            application {
+                server.apply { presenceSensorModule() }
+            }
+
+            val client = createClient {
+                install(io.ktor.client.plugins.websocket.WebSockets)
+            }
+
+            client.webSocket("/sensor/presence") {
+                val receivedMessage = async {
+                    withTimeout(1000) {
+                        (incoming.receive() as? Frame.Text)?.readText()
+                    }
+                }
+
+                server.sendMessageToPresenceSensors(buildJsonObject {
+                    put("sensorId", "42")
+                })
+
+                val receivedText = receivedMessage.await() ?: ""
+                val receivedJson = Json.parseToJsonElement(receivedText).jsonObject
+
+                receivedJson["sensorId"]?.jsonPrimitive?.content shouldBe "42"
             }
         }
     }
