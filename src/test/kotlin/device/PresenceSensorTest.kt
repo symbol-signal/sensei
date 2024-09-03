@@ -41,7 +41,7 @@ class PresenceSensorTest : StringSpec({
     lateinit var fakeMessaging: PresenceSensorRemoteMessagingFake
     lateinit var sensor: PresenceSensor
     lateinit var presenceChangeEvents: MutableList<PresenceChangeEvent>
-    lateinit var sensorHandler: (JsonMessage) -> Unit
+    lateinit var sensorHandler: WebSocketMessageHandler
 
     beforeTest {
         fakeMessaging = PresenceSensorRemoteMessagingFake()
@@ -51,10 +51,10 @@ class PresenceSensorTest : StringSpec({
         sensor.addListener { e -> presenceChangeEvents += e }
     }
 
-    fun putSensorMessage(presence: String): Instant {
+    fun putSensorMessage(presence: String, sensorId: String = "sen0395"): Instant {
         val ts = now().truncatedTo(MILLIS)
         sensorHandler(jsonMsg {
-            put("sensorId", "sen0395")
+            put("sensorId", sensorId)
             putJsonObject("eventData") {
                 put("presence", presence)
             }
@@ -81,5 +81,31 @@ class PresenceSensorTest : StringSpec({
         ts = putSensorMessage("unknown")
         sensor.presence shouldBe Presence.UNKNOWN
         sensor.lastChanged shouldBe ts
+    }
+
+    "sensor is updated only when it is targeted" {
+        val ts = putSensorMessage("on")
+        sensor.presence shouldBe Presence.PRESENT
+        sensor.lastChanged shouldBe ts
+
+        putSensorMessage("off", sensorId = "different sensor")
+        sensor.presence shouldBe Presence.PRESENT // No change
+        sensor.lastChanged shouldBe ts // No change
+    }
+
+    "message timestamp is mandatory" {
+        val ts = putSensorMessage("on")
+        sensor.presence shouldBe Presence.PRESENT
+        sensor.lastChanged shouldBe ts
+
+        sensorHandler(jsonMsg {
+            put("sensorId", "sen0395")
+            putJsonObject("eventData") {
+                put("presence", 0)
+            }
+        })
+
+        sensor.presence shouldBe Presence.PRESENT // No change
+        sensor.lastChanged shouldBe ts // No change
     }
 })

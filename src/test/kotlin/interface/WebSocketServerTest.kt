@@ -26,6 +26,7 @@ class WebSocketModuleTest : StringSpec({
 
             server.addPresenceSensorMessageHandler { message: JsonMessage ->
                 messageChannel.trySend(message)
+                MessageHandlerResult.Accepted
             }
 
             val client = createClient {

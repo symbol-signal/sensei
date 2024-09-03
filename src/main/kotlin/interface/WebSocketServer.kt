@@ -18,6 +18,13 @@ import java.util.concurrent.CopyOnWriteArrayList
 
 private val logger = KotlinLogging.logger {}
 
+sealed class MessageHandlerResult {
+    data object Accepted: MessageHandlerResult()
+    data class Rejected(val reason: String): MessageHandlerResult()
+}
+
+typealias WebSocketMessageHandler = (JsonMessage) -> MessageHandlerResult
+
 interface PresenceSensorRemoteMessaging {
     fun sendMessageToPresenceSensors(message: JsonObject)
     fun addPresenceSensorMessageHandler(handler: WebSocketMessageHandler)
@@ -28,8 +35,6 @@ data class JsonMessage(
     val payload: JsonObject,
     val timestamp: Instant = Instant.now(),
 )
-
-typealias WebSocketMessageHandler = (JsonMessage) -> Unit
 
 class WebSocketServer(private val port: Int) : PresenceSensorRemoteMessaging {
     private val presenceSensorHandlers: CopyOnWriteArrayList<WebSocketMessageHandler> = CopyOnWriteArrayList()
