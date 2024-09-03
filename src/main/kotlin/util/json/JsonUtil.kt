@@ -24,11 +24,20 @@ inline fun <reified T> jsonPathExtractor(jsonPath: String): (JsonObject) -> T? {
                         throw IllegalArgumentException("Invalid LocalDateTime format at path: $jsonPath, value: $dateStr", e)
                     }
                 }
-                Instant::class -> it.string.getOrNull(json)?.let { dateStr ->
-                    try {
-                        Instant.parse(dateStr) as? T
-                    } catch (e: DateTimeParseException) {
-                        throw IllegalArgumentException("Invalid Instant format at path: $jsonPath, value: $dateStr", e)
+                Instant::class -> {
+                    when (val element = it.getOrNull(json)) {
+                        is JsonPrimitive -> {
+                            when {
+                                element.isString -> try {
+                                    Instant.parse(element.content) as? T
+                                } catch (e: DateTimeParseException) {
+                                    throw IllegalArgumentException("Invalid Instant format at path: $jsonPath, value: ${element.content}", e)
+                                }
+                                element.longOrNull != null -> Instant.ofEpochMilli(element.long) as? T
+                                else -> throw IllegalArgumentException("Invalid Instant format at path: $jsonPath, value: $element")
+                            }
+                        }
+                        else -> throw IllegalArgumentException("Invalid Instant format at path: $jsonPath, value: $element")
                     }
                 }
                 else -> throw IllegalArgumentException("Unsupported type: ${T::class} at path: $jsonPath")

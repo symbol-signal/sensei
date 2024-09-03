@@ -17,8 +17,8 @@ fun interpretAsBoolean(value: Any?): Boolean? {
             else -> null
         }
         is String -> when (value.lowercase()) {
-            "true", "yes", "on" -> true
-            "false", "no", "off" -> false
+            "true", "yes", "1", "on" -> true
+            "false", "no", "0", "off" -> false
             else -> null
         }
         else -> null

@@ -122,9 +122,7 @@ class PresenceSensorJsonPathMessageProcessor(
             presenceExtractor(messageBody) ?: throw MissingPresenceEventJsonFieldException(sensorId, "presence")
 
         val timestamp: Instant = if (timestampExtractor != null) {
-            timestampExtractor?.invoke(messageBody) ?: throw MissingPresenceEventJsonFieldException(
-                sensorId, "timestamp"
-            )
+            timestampExtractor.invoke(messageBody) ?: throw MissingPresenceEventJsonFieldException(sensorId, "timestamp")
         } else {
             sensorMessage.timestamp
         }
