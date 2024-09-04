@@ -142,18 +142,18 @@ class PresenceSensorJsonPathMessageConversion(
 }
 
 fun sensorMessageAdapter(sensor: PresenceSensorEventDriven, messageConversion: (JsonMessage) -> PresenceChangeEvent): WebSocketMessageHandler {
-    return { jsonMessage ->
-        var event: PresenceChangeEvent? = null
+    return adapter@ { jsonMessage ->
+        val event: PresenceChangeEvent
         try {
             event = messageConversion(jsonMessage)
         } catch (e: MissingJsonFieldException) {
-            MessageHandlerResult.Rejected("Missing JSON field ${e.field}")
+            return@adapter MessageHandlerResult.Rejected("Missing JSON field ${e.field}")
         } catch (e: IllegalArgumentException) {
-            MessageHandlerResult.Rejected(e.message ?: "Unknown reason")
+            return@adapter MessageHandlerResult.Rejected(e.message ?: "Unknown reason")
         }
 
-        if (event!!.sensorId != sensor.sensorId) {
-            MessageHandlerResult.Rejected("Message not addressed for sensor ${sensor.sensorId}")
+        if (event.sensorId != sensor.sensorId) {
+            return@adapter MessageHandlerResult.Rejected("Message not addressed for sensor ${sensor.sensorId}")
         }
 
         sensor.newUpdate(event)

@@ -2,12 +2,15 @@ package device
 
 import io.kotest.core.spec.style.StringSpec
 import io.kotest.matchers.shouldBe
+import io.kotest.matchers.types.shouldBeInstanceOf
 import kotlinx.serialization.json.*
 import symsig.sensei.device.Presence
 import symsig.sensei.device.PresenceChangeEvent
 import symsig.sensei.device.PresenceSensor
 import symsig.sensei.device.PresenceSensors
 import symsig.sensei.`interface`.JsonMessage
+import symsig.sensei.`interface`.MessageHandlerResult.Accepted
+import symsig.sensei.`interface`.MessageHandlerResult.Rejected
 import symsig.sensei.`interface`.PresenceSensorRemoteMessaging
 import symsig.sensei.`interface`.WebSocketMessageHandler
 import java.time.Instant
@@ -46,20 +49,21 @@ class PresenceSensorTest : StringSpec({
     beforeTest {
         fakeMessaging = PresenceSensorRemoteMessagingFake()
         sensor = PresenceSensors.sensord("sen0395", fakeMessaging)
-        presenceChangeEvents = mutableListOf()
         sensorHandler = fakeMessaging.presenceSensorHandlers[0]
+        presenceChangeEvents = mutableListOf()
         sensor.addListener { e -> presenceChangeEvents += e }
     }
 
-    fun putSensorMessage(presence: String, sensorId: String = "sen0395"): Instant {
+    fun putSensorMessage(presence: String, sensorId: String = "sen0395", shouldBeAccepted: Boolean = true): Instant {
         val ts = now().truncatedTo(MILLIS)
-        sensorHandler(jsonMsg {
+        var res = sensorHandler(jsonMsg {
             put("sensorId", sensorId)
             putJsonObject("eventData") {
                 put("presence", presence)
             }
             put("eventAt", ts.toEpochMilli())
         })
+        if (shouldBeAccepted) res.shouldBeInstanceOf<Accepted>() else res.shouldBeInstanceOf<Rejected>()
         return ts
     }
 
@@ -88,7 +92,7 @@ class PresenceSensorTest : StringSpec({
         sensor.presence shouldBe Presence.PRESENT
         sensor.lastChanged shouldBe ts
 
-        putSensorMessage("off", sensorId = "different sensor")
+        putSensorMessage("off", sensorId = "different sensor", shouldBeAccepted = false)
         sensor.presence shouldBe Presence.PRESENT // No change
         sensor.lastChanged shouldBe ts // No change
     }
@@ -103,7 +107,7 @@ class PresenceSensorTest : StringSpec({
             putJsonObject("eventData") {
                 put("presence", 0)
             }
-        })
+        }).shouldBeInstanceOf<Rejected>()
 
         sensor.presence shouldBe Presence.PRESENT // No change
         sensor.lastChanged shouldBe ts // No change
