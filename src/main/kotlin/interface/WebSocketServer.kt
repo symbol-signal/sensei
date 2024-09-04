@@ -9,6 +9,7 @@ import io.ktor.server.websocket.*
 import io.ktor.websocket.*
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
@@ -82,6 +83,7 @@ class WebSocketServer(private val port: Int) : PresenceSensorRemoteMessaging {
     }
 
     fun stop(gracePeriodMillis: Long, timeoutMillis: Long) {
+        coroutineScope.cancel()
         server?.stop(gracePeriodMillis, timeoutMillis)
     }
 
