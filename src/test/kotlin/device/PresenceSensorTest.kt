@@ -2,6 +2,7 @@ package device
 
 import io.kotest.core.spec.style.StringSpec
 import io.kotest.matchers.shouldBe
+import io.kotest.matchers.shouldNotBe
 import io.kotest.matchers.types.shouldBeInstanceOf
 import kotlinx.serialization.json.*
 import symsig.sensei.device.Presence
@@ -39,6 +40,8 @@ fun jsonMsg(builder: JsonObjectBuilder.() -> Unit): JsonMessage {
     return JsonMessage(buildJsonObject(builder))
 }
 
+private const val SENSOR_ID = "sen0395"
+
 class PresenceSensorTest : StringSpec({
 
     lateinit var fakeMessaging: PresenceSensorRemoteMessagingFake
@@ -48,15 +51,19 @@ class PresenceSensorTest : StringSpec({
 
     beforeTest {
         fakeMessaging = PresenceSensorRemoteMessagingFake()
-        sensor = PresenceSensors.sensord("sen0395", fakeMessaging)
+        sensor = PresenceSensors.sensord(SENSOR_ID, fakeMessaging)
         sensorHandler = fakeMessaging.presenceSensorHandlers[0]
         presenceChangeEvents = mutableListOf()
         sensor.addListener { e -> presenceChangeEvents += e }
     }
 
-    fun putSensorMessage(presence: String, sensorId: String = "sen0395", shouldBeAccepted: Boolean = true): Instant {
+    fun lastEvent(): PresenceChangeEvent {
+        return presenceChangeEvents.last()
+    }
+
+    fun putSensorMessage(presence: String, sensorId: String = SENSOR_ID, shouldBeAccepted: Boolean = true): Instant {
         val ts = now().truncatedTo(MILLIS)
-        var res = sensorHandler(jsonMsg {
+        val res = sensorHandler(jsonMsg {
             put("sensorId", sensorId)
             putJsonObject("eventData") {
                 put("presence", presence)
@@ -103,7 +110,7 @@ class PresenceSensorTest : StringSpec({
         sensor.lastChanged shouldBe ts
 
         sensorHandler(jsonMsg {
-            put("sensorId", "sen0395")
+            put("sensorId", SENSOR_ID)
             putJsonObject("eventData") {
                 put("presence", 0)
             }
@@ -111,5 +118,19 @@ class PresenceSensorTest : StringSpec({
 
         sensor.presence shouldBe Presence.PRESENT // No change
         sensor.lastChanged shouldBe ts // No change
+    }
+
+    "event listeners are notified" {
+        val ts = putSensorMessage("off")
+        val e1 = lastEvent()
+        e1.sensorId shouldBe SENSOR_ID
+        e1.presence shouldBe Presence.ABSENT
+        e1.changedAt shouldBe ts
+
+        putSensorMessage("on", sensorId = "different", shouldBeAccepted = false)
+        e1 shouldBe lastEvent()
+
+        putSensorMessage("on")
+        e1 shouldNotBe lastEvent()
     }
 })
