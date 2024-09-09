@@ -102,7 +102,7 @@ class WebSocketServer(private val port: Int) : PresenceSensorRemoteMessaging {
     }
 
     private fun launchMessageSendingCoroutine(client: DefaultWebSocketSession, message: JsonObject) {
-        coroutineScope.launch {
+        client.launch {
             try {
                 client.send(Frame.Text(message.toString()))
             } catch (e: Exception) {
