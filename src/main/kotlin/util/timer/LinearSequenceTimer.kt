@@ -1,4 +1,4 @@
-package symsig.sensei
+package symsig.sensei.util.timer
 
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.runBlocking
