@@ -47,14 +47,15 @@ class LinearSequenceTimer(
             val range = values.last - values.first
             val currentTime = Duration.between(start, nowDateTime).toMillis()
             val newValue = (currentTime / durationMs * range).roundToInt()
-            if (lastValue != newValue) {
-                lastValue = newValue
-            }
+
             val rateMs = durationMs / range
             val next = (newValue - this.values.first + 1) * rateMs
 
             val nextRun: LocalTime = start.plus(next.toLong(), ChronoUnit.MILLIS)
-            callback(SequenceUpdate(lastValue!!, nowDateTime, nextRun.atDate(nowDateTime.toLocalDate())))
+            if (lastValue != newValue) {
+                lastValue = newValue
+                callback(SequenceUpdate(newValue, nowDateTime, nextRun.atDate(nowDateTime.toLocalDate())))
+            }
 
             delay(Duration.between(nowDateTime.toLocalTime(), nextRun).toMillis())
             continue
@@ -98,7 +99,7 @@ private class NextDayCycleCalc(start: LocalTime, end: LocalTime, now: LocalDateT
 }
 
 fun main() {
-    val phase = LinearSequenceTimer(LocalTime.of(9, 10)..LocalTime.of(9, 13), 1..200) { e -> println(e) }
+    val phase = LinearSequenceTimer(LocalTime.of(12, 40)..LocalTime.of(12, 48), 100..200) { e -> println(e) }
     runBlocking {
         phase.run()
     }
