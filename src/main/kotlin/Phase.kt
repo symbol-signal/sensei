@@ -17,7 +17,7 @@ data class SequenceUpdate(
 )
 
 
-class TimedLinearSequenceNotifier(
+class LinearSequenceTimer(
     val timeBounds: ClosedRange<LocalTime>,
     val values: IntProgression,
     private val callback: (SequenceUpdate) -> Unit
@@ -32,15 +32,18 @@ class TimedLinearSequenceNotifier(
     suspend fun run() {
         while (true) {
             val nowDateTime = LocalDateTime.now()
-            val nowTime = nowDateTime.toLocalTime()
-            val state = if (start.isBefore(end)) SameDayIntervalStrategy(start, end, nowDateTime) else NextDayIntervalStrategy(start, end, nowDateTime)
+            val cycleCalc = if (start.isBefore(end)) SameDayCycleCalc(start, end, nowDateTime) else NextDayCycleCalc(
+                start,
+                end,
+                nowDateTime
+            )
 
-            if (state.isOutsideCycle()) {
-                delay(state.durationUntilNewCycle().toMillis())
+            if (cycleCalc.isOutsideCycle()) {
+                delay(cycleCalc.durationUntilNewCycle().toMillis())
                 continue
             }
 
-            val durationMs = state.cycleDuration().toMillis().toDouble()
+            val durationMs = cycleCalc.cycleDuration().toMillis().toDouble()
             val range = values.last - values.first
             val currentTime = Duration.between(start, nowDateTime).toMillis()
             val newValue = (currentTime / durationMs * range).roundToInt()
@@ -60,7 +63,7 @@ class TimedLinearSequenceNotifier(
     }
 }
 
-private abstract class IntervalStrategy(val start: LocalTime, val end: LocalTime, val now: LocalDateTime) {
+private abstract class CycleCalc(val start: LocalTime, val end: LocalTime, val now: LocalDateTime) {
 
     abstract fun isOutsideCycle(): Boolean
 
@@ -75,26 +78,27 @@ private abstract class IntervalStrategy(val start: LocalTime, val end: LocalTime
     }
 }
 
-private class SameDayIntervalStrategy(start: LocalTime, end: LocalTime, now: LocalDateTime) : IntervalStrategy(start, end, now) {
+private class SameDayCycleCalc(start: LocalTime, end: LocalTime, now: LocalDateTime) : CycleCalc(start, end, now) {
 
-    override fun isOutsideCycle() = now.toLocalTime().isBefore(start)
+    override fun isOutsideCycle() = now.toLocalTime().isBefore(start) || now.toLocalTime().isAfter(end)
 
     override fun daysUntilNewCycle() = if (now.toLocalTime().isBefore(start)) 0 else 1
 
     override fun cycleDuration(): Duration = Duration.between(start, end)
 }
 
-private class NextDayIntervalStrategy(start: LocalTime, end: LocalTime, now: LocalDateTime) : IntervalStrategy(start, end, now) {
+private class NextDayCycleCalc(start: LocalTime, end: LocalTime, now: LocalDateTime) : CycleCalc(start, end, now) {
 
     override fun isOutsideCycle() = now.toLocalTime().isBefore(start) && now.toLocalTime().isAfter(end)
 
     override fun daysUntilNewCycle() = 0
 
-    override fun cycleDuration(): Duration = Duration.between(start.atDate(now.toLocalDate()), end.atDate(now.toLocalDate().plusDays(1)))
+    override fun cycleDuration(): Duration =
+        Duration.between(start.atDate(now.toLocalDate()), end.atDate(now.toLocalDate().plusDays(1)))
 }
 
 fun main() {
-    val phase = TimedLinearSequenceNotifier(LocalTime.of(12, 25)..LocalTime.of(12, 26), 0..200) { e -> println(e) }
+    val phase = LinearSequenceTimer(LocalTime.of(9, 10)..LocalTime.of(9, 13), 1..200) { e -> println(e) }
     runBlocking {
         phase.run()
     }
