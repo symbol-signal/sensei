@@ -46,7 +46,8 @@ class LinearSequenceTimer(
             val durationMs = cycleCalc.cycleDuration().toMillis().toDouble()
             val range = values.last - values.first
             val currentTime = Duration.between(start, nowDateTime).toMillis()
-            val newValue = (currentTime / durationMs * range).roundToInt()
+            val newValue = ((currentTime / durationMs) * range + values.first).roundToInt()
+
 
             val rateMs = durationMs / range
             val next = (newValue - this.values.first + 1) * rateMs
