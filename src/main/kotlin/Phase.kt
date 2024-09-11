@@ -25,7 +25,6 @@ class LinearSequenceTimer(
 
     private val start = timeBounds.start
     private val end = timeBounds.endInclusive
-    private val intervalDuration = Duration.between(start, end)
 
     private var lastValue: Int? = null
 
@@ -39,6 +38,10 @@ class LinearSequenceTimer(
             )
 
             if (cycleCalc.isOutsideCycle()) {
+                if (Duration.between(end, nowDateTime.toLocalTime()) < Duration.ofSeconds(10) && lastValue != values.last) {
+                    lastValue = values.last
+                    callback(SequenceUpdate(values.last, nowDateTime, cycleCalc.nextCycleStartAt().toLocalDateTime()))
+                }
                 delay(cycleCalc.durationUntilNewCycle().toMillis())
                 continue
             }
@@ -47,7 +50,6 @@ class LinearSequenceTimer(
             val range = values.last - values.first
             val currentTime = Duration.between(start, nowDateTime).toMillis()
             val newValue = ((currentTime / durationMs) * range + values.first).roundToInt()
-
 
             val rateMs = durationMs / range
             val next = (newValue - this.values.first + 1) * rateMs
@@ -73,16 +75,14 @@ private abstract class CycleCalc(val start: LocalTime, val end: LocalTime, val n
 
     abstract fun cycleDuration(): Duration
 
-    fun durationUntilNewCycle(): Duration {
-        val plusDays: Long = daysUntilNewCycle().toLong()
-        val nextCycleStart = ZonedDateTime.of(now.toLocalDate().plusDays(plusDays), start, systemDefault())
-        return Duration.between(now.atZone(systemDefault()), nextCycleStart)
-    }
+    fun nextCycleStartAt(): ZonedDateTime = ZonedDateTime.of(now.toLocalDate().plusDays(daysUntilNewCycle().toLong()), start, systemDefault())
+
+    fun durationUntilNewCycle(): Duration = Duration.between(now.atZone(systemDefault()), nextCycleStartAt())
 }
 
 private class SameDayCycleCalc(start: LocalTime, end: LocalTime, now: LocalDateTime) : CycleCalc(start, end, now) {
 
-    override fun isOutsideCycle() = now.toLocalTime().isBefore(start) || now.toLocalTime().isAfter(end)
+    override fun isOutsideCycle() = now.toLocalTime().isBefore(start) || (now.toLocalTime() == end || now.toLocalTime().isAfter(end))
 
     override fun daysUntilNewCycle() = if (now.toLocalTime().isBefore(start)) 0 else 1
 
@@ -91,7 +91,7 @@ private class SameDayCycleCalc(start: LocalTime, end: LocalTime, now: LocalDateT
 
 private class NextDayCycleCalc(start: LocalTime, end: LocalTime, now: LocalDateTime) : CycleCalc(start, end, now) {
 
-    override fun isOutsideCycle() = now.toLocalTime().isBefore(start) && now.toLocalTime().isAfter(end)
+    override fun isOutsideCycle() = now.toLocalTime().isBefore(start) && (now.toLocalTime() == end || now.toLocalTime().isAfter(end))
 
     override fun daysUntilNewCycle() = 0
 
@@ -100,7 +100,7 @@ private class NextDayCycleCalc(start: LocalTime, end: LocalTime, now: LocalDateT
 }
 
 fun main() {
-    val phase = LinearSequenceTimer(LocalTime.of(12, 40)..LocalTime.of(12, 48), 100..200) { e -> println(e) }
+    val phase = LinearSequenceTimer(LocalTime.of(12, 59)..LocalTime.of(13, 0), 100..200) { e -> println(e) }
     runBlocking {
         phase.run()
     }
