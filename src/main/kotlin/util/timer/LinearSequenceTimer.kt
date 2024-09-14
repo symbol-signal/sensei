@@ -1,7 +1,6 @@
 package symsig.sensei.util.timer
 
 import kotlinx.coroutines.delay
-import kotlinx.coroutines.runBlocking
 import java.time.Duration
 import java.time.LocalDateTime
 import java.time.LocalTime
@@ -20,13 +19,19 @@ data class SequenceUpdate(
 class LinearSequenceTimer(
     val timeBounds: ClosedRange<LocalTime>,
     val values: IntProgression,
-    private val callback: (SequenceUpdate) -> Unit
+    private val callback: suspend (SequenceUpdate) -> Unit
 ) {
 
     private val start = timeBounds.start
     private val end = timeBounds.endInclusive
 
     private var lastValue: Int? = null
+
+    init {
+        require(start != end) {
+            "Time bounds must be distinctive values"
+        }
+    }
 
     suspend fun run() {
         while (true) {
@@ -93,12 +98,4 @@ private class NextDayCycleCalc(start: LocalTime, end: LocalTime, now: LocalDateT
 
     override fun cycleDuration(): Duration =
         Duration.between(start.atDate(now.toLocalDate()), end.atDate(now.toLocalDate().plusDays(1)))
-}
-
-fun main() {
-//    val phase = LinearSequenceTimer(LocalTime.of(12, 48)..LocalTime.of(12, 50), 200..400) { e -> println(e) }
-    val phase = LinearSequenceTimer(LocalTime.of(13, 4)..LocalTime.of(13, 5), 400 downTo 200) { e -> println(e) }
-    runBlocking {
-        phase.run()
-    }
 }

@@ -1,8 +1,14 @@
 package symsig.sensei.device
 
+import io.github.oshai.kotlinlogging.KotlinLogging
 import io.ktor.client.*
 import io.ktor.client.request.*
 import io.ktor.client.statement.*
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.launch
+import symsig.sensei.util.timer.LinearSequenceTimer
+import symsig.sensei.util.timer.SequenceUpdate
+import java.time.LocalTime
 
 /**
  * Interface for controlling a dimmer.
@@ -24,6 +30,31 @@ interface Dimmer {
      * @throws Exception If an error occurs while sending the command.
      */
     suspend fun lightOff(lightId: String)
+
+    suspend fun setBrightness(lightId: String, value: Int)
+}
+
+class ScopedDimmer(val scope: CoroutineScope, dimmer: Dimmer) : Dimmer by dimmer {}
+
+class DimmerJobs(val scopedDimmer: ScopedDimmer) {
+
+    private val log = KotlinLogging.logger {}
+
+    fun adjustBrightnessLinearly(lightId: String, between: ClosedRange<LocalTime>, brightness: IntProgression) {
+        val timer = LinearSequenceTimer(between, brightness) { e -> adjustBrightness(lightId, e) }
+        scopedDimmer.scope.launch {
+            timer.run()
+        }
+    }
+
+    private suspend fun adjustBrightness(lightId: String, update: SequenceUpdate) {
+        try {
+            scopedDimmer.setBrightness(lightId, update.value)
+            log.info { "[dimmer_brightness_set] value=[${update.value}]" }
+        } catch (e: RemoteOpException) {
+            log.error(e) { "[scheduled_dimmer_brightness_adjustment_failed]" }
+        }
+    }
 }
 
 /**
@@ -51,6 +82,24 @@ class ShellyPro2PMDimmerHttp(private val hostname: String, private val client: H
      */
     override suspend fun lightOff(lightId: String) {
         sendSwitchCommand(lightId, false)
+    }
+
+    /**
+     * Sets the brightness of the light.
+     *
+     * @param value The brightness value to set (0-100).
+     * @throws IllegalArgumentException If the brightness value is out of range.
+     * @throws Exception If an error occurs while sending the command to the dimmer.
+     */
+    override suspend fun setBrightness(lightId: String, value: Int) {
+        require (value in 0..100) { "Brightness value $value is not between 0 and 100" }
+
+        val url = "http://$hostname/rpc/Light.Set?id=$lightId&brightness=$value"
+        val response: HttpResponse = client.get(url)
+
+        if (response.status.value !in 200..299) {
+            throw RemoteOpException("Failed to set brightness: HTTP ${response.status.value}")
+        }
     }
 
     /**
