@@ -56,22 +56,55 @@ class DimmerJobs(private val scope: CoroutineScope, private val dimmer: Dimmer) 
 
     private val log = KotlinLogging.logger {}
 
-    fun adjustBrightnessLinearly(lightId: String, between: ClosedRange<LocalTime>, brightness: IntProgression) {
-        val timer = LinearSequenceTimer(between, brightness) { e -> adjustBrightness(lightId, e) }
-        scope.launch {
-            timer.run()
+    private val factory = DimmerJobsFactory()
+
+    fun create() = factory
+
+    inner class DimmerJobsFactory {
+
+        fun adjustBrightnessLinearly(lightId: String, between: ClosedRange<LocalTime>, brightness: IntProgression): LinearBrightnessAdjustmentJob {
+            return LinearBrightnessAdjustmentJob(between, brightness, setOf(lightId))
         }
     }
 
-    private suspend fun adjustBrightness(lightId: String, update: SequenceUpdate) {
-        try {
-            dimmer.setBrightness(lightId, update.value)
-            log.info { "[dimmer_brightness_set] value=[${update.value}]" }
-        } catch (e: RemoteOpException) {
-            log.error(e) { "[scheduled_dimmer_brightness_adjustment_failed]" }
+    inner class LinearBrightnessAdjustmentJob(private val between: ClosedRange<LocalTime>, private val brightness: IntProgression, private val lightIds: Set<String> = emptySet()) {
+
+        private var job: Job? = null
+        private val isActive get() = job?.isActive == true
+
+        fun start() {
+            check(!isActive) { "Linear brightness adjustment job is already running" }
+
+            val timer = LinearSequenceTimer(between, brightness, this::adjustBrightness)
+            job = scope.launch {
+                try {
+                    timer.run()
+                } finally {
+                    job = null
+                }
+            }
+            log.info { "[linear_brightness_adjustment_job_started]" }
+        }
+
+        fun cancel() {
+            val currentJob = job
+            check(currentJob != null && currentJob.isActive) { "No active linear brightness adjustment job to cancel" }
+
+            currentJob.cancel()
+            log.info { "[linear_brightness_adjustment_job_cancelled]" }
+        }
+
+        private suspend fun adjustBrightness(update: SequenceUpdate) {
+            try {
+                lightIds.forEach { dimmer.setBrightness(it, update.value) }
+                log.info { "[dimmer_brightness_set] value=[${update.value}]" }
+            } catch (e: RemoteOpException) {
+                log.error(e) { "[scheduled_dimmer_brightness_adjustment_failed]" }
+            }
         }
     }
 }
+
 
 /**
  * Implementation of [Dimmer] for Shelly Pro 2PM dimmer via HTTP control.

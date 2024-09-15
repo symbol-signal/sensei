@@ -37,7 +37,7 @@ fun main() {
         }
     }
 
-    bathroomDimmer.jobs.adjustBrightnessLinearly("1", eveningToNight, 100 downTo 15)
+    bathroomDimmer.jobs.create().adjustBrightnessLinearly("1", eveningToNight, 100 downTo 15).start()
 
     wsServer.start()
     log.info { "[ws_server_started]" }
