@@ -4,8 +4,7 @@ import io.github.oshai.kotlinlogging.KotlinLogging
 import io.ktor.client.*
 import io.ktor.client.request.*
 import io.ktor.client.statement.*
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.launch
+import kotlinx.coroutines.*
 import symsig.sensei.util.timer.LinearSequenceTimer
 import symsig.sensei.util.timer.SequenceUpdate
 import java.time.LocalTime
@@ -34,22 +33,39 @@ interface Dimmer {
     suspend fun setBrightness(lightId: String, value: Int)
 }
 
-class ScopedDimmer(val scope: CoroutineScope, dimmer: Dimmer) : Dimmer by dimmer {}
+interface ManagedDimmer : Dimmer {
 
-class DimmerJobs(val scopedDimmer: ScopedDimmer) {
+    val jobs: DimmerJobs
+
+    fun cancel()
+}
+
+open class ChildScopeDimmer(parentScope: CoroutineScope, dimmer: Dimmer) : Dimmer by dimmer, ManagedDimmer {
+
+    protected val job = SupervisorJob(parentScope.coroutineContext[Job])
+    protected val scope = parentScope + job
+
+    override val jobs = DimmerJobs(scope, dimmer)
+
+    override fun cancel() {
+        job.cancel()
+    }
+}
+
+class DimmerJobs(private val scope: CoroutineScope, private val dimmer: Dimmer) {
 
     private val log = KotlinLogging.logger {}
 
     fun adjustBrightnessLinearly(lightId: String, between: ClosedRange<LocalTime>, brightness: IntProgression) {
         val timer = LinearSequenceTimer(between, brightness) { e -> adjustBrightness(lightId, e) }
-        scopedDimmer.scope.launch {
+        scope.launch {
             timer.run()
         }
     }
 
     private suspend fun adjustBrightness(lightId: String, update: SequenceUpdate) {
         try {
-            scopedDimmer.setBrightness(lightId, update.value)
+            dimmer.setBrightness(lightId, update.value)
             log.info { "[dimmer_brightness_set] value=[${update.value}]" }
         } catch (e: RemoteOpException) {
             log.error(e) { "[scheduled_dimmer_brightness_adjustment_failed]" }

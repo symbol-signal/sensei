@@ -4,7 +4,10 @@ import io.github.oshai.kotlinlogging.KotlinLogging
 import io.ktor.client.*
 import io.ktor.client.engine.cio.*
 import kotlinx.coroutines.*
-import symsig.sensei.device.*
+import symsig.sensei.device.ChildScopeDimmer
+import symsig.sensei.device.Presence
+import symsig.sensei.device.PresenceSensors
+import symsig.sensei.device.ShellyPro2PMDimmerHttp
 import symsig.sensei.`interface`.WebSocketServer
 import java.time.LocalTime
 
@@ -23,7 +26,7 @@ fun main() {
     }
 
     val httpClient = HttpClient(CIO)
-    val bathroomDimmer = ShellyPro2PMDimmerHttp("shellyprodm2pm-08f9e0e49950", httpClient)
+    val bathroomDimmer = ChildScopeDimmer(appScope, ShellyPro2PMDimmerHttp("shellyprodm2pm-08f9e0e49950", httpClient))
     bathroomSensor.addListener { event ->
         appScope.launch {
             when (event.presence) {
@@ -34,8 +37,7 @@ fun main() {
         }
     }
 
-    val dimmerJobs = DimmerJobs(ScopedDimmer(appScope, bathroomDimmer))
-    dimmerJobs.adjustBrightnessLinearly("1", eveningToNight, 100 downTo 15)
+    bathroomDimmer.jobs.adjustBrightnessLinearly("1", eveningToNight, 100 downTo 15)
 
     wsServer.start()
     log.info { "[ws_server_started]" }
