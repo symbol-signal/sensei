@@ -13,6 +13,7 @@ import java.time.LocalTime
 
 private val log = KotlinLogging.logger {}
 
+private val wakeupTime = LocalTime.of(6, 30)
 private val eveningToNight = LocalTime.of(18, 0)..LocalTime.of(22, 0)
 
 fun main() {
@@ -37,7 +38,8 @@ fun main() {
         }
     }
 
-    bathroomDimmer.jobs.create().adjustBrightnessLinearly("1", eveningToNight, 100 downTo 15).start()
+    bathroomDimmer.jobs.create().setBrightnessDaily(wakeupTime, 100, "1").start()
+    bathroomDimmer.jobs.create().adjustBrightnessLinearly(eveningToNight, 100 downTo 15, "1").start()
 
     wsServer.start()
     log.info { "[ws_server_started]" }

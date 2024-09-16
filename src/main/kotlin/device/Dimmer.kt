@@ -5,9 +5,11 @@ import io.ktor.client.*
 import io.ktor.client.request.*
 import io.ktor.client.statement.*
 import kotlinx.coroutines.*
+import symsig.sensei.util.timer.DailyTimer
 import symsig.sensei.util.timer.LinearSequenceTimer
 import symsig.sensei.util.timer.SequenceUpdate
 import java.time.LocalTime
+import java.util.concurrent.CopyOnWriteArrayList
 
 /**
  * Interface for controlling a dimmer.
@@ -58,40 +60,87 @@ class DimmerJobs(private val scope: CoroutineScope, private val dimmer: Dimmer) 
 
     private val factory = DimmerJobsFactory()
 
+    private val _active = CopyOnWriteArrayList<DimmerJob>()
+
+    val active: List<DimmerJob> get() = _active.toList()
+
     fun create() = factory
 
-    inner class DimmerJobsFactory {
-
-        fun adjustBrightnessLinearly(lightId: String, between: ClosedRange<LocalTime>, brightness: IntProgression): LinearBrightnessAdjustmentJob {
-            return LinearBrightnessAdjustmentJob(between, brightness, setOf(lightId))
-        }
-    }
-
-    inner class LinearBrightnessAdjustmentJob(private val between: ClosedRange<LocalTime>, private val brightness: IntProgression, private val lightIds: Set<String> = emptySet()) {
+    abstract inner class DimmerJob(val jobName: String) {
 
         private var job: Job? = null
-        private val isActive get() = job?.isActive == true
+        val isActive get() = job?.isActive == true
+
+        protected abstract suspend fun execute()
 
         fun start() {
-            check(!isActive) { "Linear brightness adjustment job is already running" }
+            check(!isActive) { "Job $jobName is already running" }
 
-            val timer = LinearSequenceTimer(between, brightness, this::adjustBrightness)
-            job = scope.launch {
+            job = scope.launch(CoroutineName(jobName)) {
                 try {
-                    timer.run()
+                    execute()
                 } finally {
                     job = null
+                    _active.remove(this@DimmerJob)
                 }
             }
-            log.info { "[linear_brightness_adjustment_job_started]" }
+            _active.add(this)
+            log.info { "[dimmer_job_started] job_name=[$jobName]" }
         }
 
         fun cancel() {
             val currentJob = job
-            check(currentJob != null && currentJob.isActive) { "No active linear brightness adjustment job to cancel" }
+            check(currentJob != null && currentJob.isActive) { "No active $jobName job to cancel" }
 
             currentJob.cancel()
-            log.info { "[linear_brightness_adjustment_job_cancelled]" }
+
+            log.info { "[dimmer_job_cancelled] job_name=[$jobName]" }
+        }
+    }
+
+    inner class DimmerJobsFactory {
+
+        fun setBrightnessDaily(at: LocalTime, brightnessValue: Int, vararg lightIds: String): SetBrightnessDailyJob {
+            return SetBrightnessDailyJob(at, brightnessValue, lightIds.toSet())
+        }
+
+        fun adjustBrightnessLinearly(
+            between: ClosedRange<LocalTime>,
+            brightness: IntProgression,
+            vararg lightIds: String
+        ): LinearBrightnessAdjustmentJob {
+            return LinearBrightnessAdjustmentJob(between, brightness, lightIds.toSet())
+        }
+    }
+
+    inner class SetBrightnessDailyJob(
+        val at: LocalTime,
+        val brightnessValue: Int,
+        private val lightIds: Set<String> = emptySet()
+    ) : DimmerJob("set_brightness_daily") {
+
+        override suspend fun execute() {
+            DailyTimer(at, this::adjustBrightness).run()
+        }
+
+        private suspend fun adjustBrightness() {
+            try {
+                lightIds.forEach { dimmer.setBrightness(it, brightnessValue) }
+                log.info { "[dimmer_brightness_set] value=[$brightnessValue]" }
+            } catch (e: RemoteOpException) {
+                log.error(e) { "[scheduled_dimmer_brightness_adjustment_failed]" }
+            }
+        }
+    }
+
+    inner class LinearBrightnessAdjustmentJob(
+        private val between: ClosedRange<LocalTime>,
+        private val brightness: IntProgression,
+        private val lightIds: Set<String> = emptySet()
+    ) : DimmerJob("linear_brightness_adjustment") {
+
+        override suspend fun execute() {
+            LinearSequenceTimer(between, brightness, this::adjustBrightness).run()
         }
 
         private suspend fun adjustBrightness(update: SequenceUpdate) {
@@ -141,7 +190,7 @@ class ShellyPro2PMDimmerHttp(private val hostname: String, private val client: H
      * @throws Exception If an error occurs while sending the command to the dimmer.
      */
     override suspend fun setBrightness(lightId: String, value: Int) {
-        require (value in 0..100) { "Brightness value $value is not between 0 and 100" }
+        require(value in 0..100) { "Brightness value $value is not between 0 and 100" }
 
         val url = "http://$hostname/rpc/Light.Set?id=$lightId&brightness=$value"
         val response: HttpResponse = client.get(url)
