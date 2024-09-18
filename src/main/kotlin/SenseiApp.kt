@@ -9,6 +9,8 @@ import symsig.sensei.device.Presence
 import symsig.sensei.device.PresenceSensors
 import symsig.sensei.device.ShellyPro2PMDimmerHttp
 import symsig.sensei.`interface`.WebSocketServer
+import symsig.sensei.util.timer.DebounceScheduler
+import java.time.Duration.ofSeconds
 import java.time.LocalTime
 
 private val log = KotlinLogging.logger {}
@@ -28,7 +30,19 @@ fun main() {
 
     val httpClient = HttpClient(CIO)
     val bathroomDimmer = ChildScopeDimmer(appScope, ShellyPro2PMDimmerHttp("shellyprodm2pm-08f9e0e49950", httpClient))
+    val debounceScheduler = DebounceScheduler(appScope)
     bathroomSensor.addListener { event ->
+        when (event.presence) {
+            Presence.PRESENT -> {
+                appScope.launch { bathroomDimmer.lightOn("1") }
+                debounceScheduler.schedule(ofSeconds(5)) { bathroomDimmer.lightOn("0") }
+            }
+            Presence.ABSENT -> {
+                appScope.launch { bathroomDimmer.lightOff("1") }
+                debounceScheduler.schedule(ofSeconds(3)) { bathroomDimmer.lightOff("0") }
+            }
+            Presence.UNKNOWN -> log.warn { "[unknown_presence_state] sensor=[$bathroomSensor]" }
+        }
         appScope.launch {
             when (event.presence) {
                 Presence.PRESENT -> bathroomDimmer.lightOn("1")
@@ -36,6 +50,7 @@ fun main() {
                 Presence.UNKNOWN -> log.warn { "[unknown_presence_state] sensor=[$bathroomSensor]" }
             }
         }
+
     }
 
     bathroomDimmer.jobs.create().setBrightnessDaily(wakeupTime, 100, "1").start()

@@ -4,7 +4,7 @@ rules {
         ensure lights "bathroom" kept on
     }
     keep("Lights on in the bathroom when someone is there") {
-        whilst presenceIn "bathroom" extended 5.sec
+        whilst presenceIn "bathroom" + 5.sec
         ensure lights "bathroom" kept on
     }
 }
@@ -15,7 +15,11 @@ rules {
         perform curtains "bedroom" open
     }
     trigger("Turn lights on") {
-        on entranceTo "bathroom"
-        perform lights "bathroom" turn on
+        on entrance "bathroom"
+        perform delayed 3.sec dimmer "bathroom" lights ["1"] turn on
+    }
+    trigger("Turn lights off") {
+        on exit "bathroom"
+        perform delayed 3.sec lights "bathroom" turn off
     }
 }
