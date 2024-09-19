@@ -35,7 +35,7 @@ fun main() {
         when (event.presence) {
             Presence.PRESENT -> {
                 appScope.launch { bathroomDimmer.lightOn("1") }
-                debounceScheduler.schedule(ofSeconds(5)) { bathroomDimmer.lightOn("0") }
+                debounceScheduler.schedule(ofSeconds(8)) { bathroomDimmer.lightOn("0") }
             }
             Presence.ABSENT -> {
                 appScope.launch { bathroomDimmer.lightOff("1") }
@@ -53,8 +53,9 @@ fun main() {
 
     }
 
-    bathroomDimmer.jobs.create().setBrightnessDaily(wakeupTime, 100, "1").start()
-    bathroomDimmer.jobs.create().adjustBrightnessLinearly(eveningToNight, 100 downTo 15, "1").start()
+    bathroomDimmer.jobs.create().setBrightnessDaily(wakeupTime, 100, "0", "1").start()
+    bathroomDimmer.jobs.create().adjustBrightnessLinearly(eveningToNight, 100 downTo 15, "0").start()
+    bathroomDimmer.jobs.create().adjustBrightnessLinearly(eveningToNight, 100 downTo 0,  "1").start()
 
     wsServer.start()
     log.info { "[ws_server_started]" }
