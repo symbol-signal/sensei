@@ -14,25 +14,36 @@ import java.util.concurrent.CopyOnWriteArrayList
 /**
  * Interface for controlling a dimmer.
  */
-interface Dimmer {
+interface Light {
 
     /**
-     * Turns on the light with the given [lightId].
+     * Turns on the light
      *
-     * @param lightId The ID of the light to turn on.
-     * @throws Exception If an error occurs while sending the command.
+     * @throws RemoteOpException If an error occurs while sending the command.
      */
-    suspend fun lightOn(lightId: String)
+    suspend fun lightOn()
 
     /**
-     * Turns off the light with the given [lightId].
+     * Turns off the light
      *
-     * @param lightId The ID of the light to turn off.
-     * @throws Exception If an error occurs while sending the command.
+     * @throws RemoteOpException If an error occurs while sending the command.
      */
-    suspend fun lightOff(lightId: String)
+    suspend fun lightOff()
 
-    suspend fun setBrightness(lightId: String, value: Int)
+    /**
+     * Set brightness level (usually between 0 and 100)
+     *
+     * @throws RemoteOpException If an error occurs while sending the command.
+     */
+    suspend fun setBrightness(value: Int)
+}
+
+/**
+ * Interface for controlling a dimmer.
+ */
+interface Dimmer : Light {
+
+    fun lights(vararg lightIds: String): Light
 }
 
 interface ManagedDimmer : Dimmer {
@@ -125,7 +136,7 @@ class DimmerJobs(private val scope: CoroutineScope, private val dimmer: Dimmer) 
 
         private suspend fun adjustBrightness() {
             try {
-                lightIds.forEach { dimmer.setBrightness(it, brightnessValue) }
+                dimmer.lights(*lightIds.toTypedArray()).setBrightness(brightnessValue)
                 log.info { "[dimmer_brightness_set] value=[$brightnessValue]" }
             } catch (e: RemoteOpException) {
                 log.error(e) { "[scheduled_dimmer_brightness_adjustment_failed]" }
@@ -145,7 +156,7 @@ class DimmerJobs(private val scope: CoroutineScope, private val dimmer: Dimmer) 
 
         private suspend fun adjustBrightness(update: SequenceUpdate) {
             try {
-                lightIds.forEach { dimmer.setBrightness(it, update.value) }
+                dimmer.lights(*lightIds.toTypedArray()).setBrightness(update.value)
                 log.info { "[dimmer_brightness_set] value=[${update.value}]" }
             } catch (e: RemoteOpException) {
                 log.error(e) { "[scheduled_dimmer_brightness_adjustment_failed]" }
@@ -154,49 +165,80 @@ class DimmerJobs(private val scope: CoroutineScope, private val dimmer: Dimmer) 
     }
 }
 
-
 /**
  * Implementation of [Dimmer] for Shelly Pro 2PM dimmer via HTTP control.
  *
  * @property hostname The hostname or IP address of the Shelly Pro 2PM device.
  */
-class ShellyPro2PMDimmerHttp(private val hostname: String, private val client: HttpClient) : Dimmer {
+class ShellyPro2PMDimmerHttp(
+    private val hostname: String,
+    private val client: HttpClient
+) : Dimmer {
 
-    /**
-     * Turns on the light with the given [lightId].
-     *
-     * @param lightId The ID of the light to turn on.
-     * @throws Exception If an error occurs while sending the command to the dimmer.
-     */
-    override suspend fun lightOn(lightId: String) {
-        sendSwitchCommand(lightId, true)
+    companion object {
+        const val LIGHT_0 = "0"
+        const val LIGHT_1 = "1"
+        val ALL_CHANNELS = setOf(LIGHT_0, LIGHT_1)
     }
 
     /**
-     * Turns off the light with the given [lightId].
-     *
-     * @param lightId The ID of the light to turn off.
-     * @throws Exception If an error occurs while sending the command to the dimmer.
+     * Returns a [Light] instance controlling the specified [lightIds].
      */
-    override suspend fun lightOff(lightId: String) {
-        sendSwitchCommand(lightId, false)
+    override fun lights(vararg lightIds: String): Light {
+        return ShellyLight(lightIds.toSet())
+    }
+
+    override suspend fun lightOn() {
+        ShellyLight(ALL_CHANNELS).lightOn()
+    }
+
+    override suspend fun lightOff() {
+        ShellyLight(ALL_CHANNELS).lightOff()
+    }
+
+    override suspend fun setBrightness(value: Int) {
+        ShellyLight(ALL_CHANNELS).setBrightness(value)
     }
 
     /**
-     * Sets the brightness of the light.
-     *
-     * @param value The brightness value to set (0-100).
-     * @throws IllegalArgumentException If the brightness value is out of range.
-     * @throws Exception If an error occurs while sending the command to the dimmer.
+     * Inner class implementing [Light], controlling specific light IDs.
      */
-    override suspend fun setBrightness(lightId: String, value: Int) {
-        require(value in 0..100) { "Brightness value $value is not between 0 and 100" }
+    inner class ShellyLight(private val lightIds: Set<String>) : Light {
 
-        val url = "http://$hostname/rpc/Light.Set?id=$lightId&brightness=$value"
-        val response: HttpResponse = client.get(url)
+        /**
+         * Turns on the specified lights.
+         *
+         * @throws RemoteOpException If an error occurs while sending the command.
+         */
+        override suspend fun lightOn() {
+            for (lightId in lightIds) {
+                sendSwitchCommand(lightId, true)
+            }
+        }
 
-        if (response.status.value !in 200..299) {
-            throw RemoteOpException("Failed to set brightness: HTTP ${response.status.value}")
+        /**
+         * Turns off the specified lights.
+         *
+         * @throws RemoteOpException If an error occurs while sending the command.
+         */
+        override suspend fun lightOff() {
+            for (lightId in lightIds) {
+                sendSwitchCommand(lightId, false)
+            }
+        }
+
+        /**
+         * Sets the brightness for the specified lights.
+         *
+         * @param value The brightness value to set (0-100).
+         * @throws IllegalArgumentException If the brightness value is out of range.
+         * @throws RemoteOpException If an error occurs while sending the command.
+         */
+        override suspend fun setBrightness(value: Int) {
+            require(value in 0..100) { "Brightness value $value is not between 0 and 100" }
+            for (lightId in lightIds) {
+                setBrightnessForLight(lightId, value)
+            }
         }
     }
 
@@ -205,7 +247,7 @@ class ShellyPro2PMDimmerHttp(private val hostname: String, private val client: H
      *
      * @param lightId The ID of the light.
      * @param on Whether to turn the light on (true) or off (false).
-     * @throws Exception If the HTTP request fails or the response indicates an error.
+     * @throws RemoteOpException If the HTTP request fails or the response indicates an error.
      */
     private suspend fun sendSwitchCommand(lightId: String, on: Boolean) {
         val url = "http://$hostname/rpc/Light.Set?id=$lightId&on=$on"
@@ -213,6 +255,22 @@ class ShellyPro2PMDimmerHttp(private val hostname: String, private val client: H
 
         if (response.status.value !in 200..299) {
             throw RemoteOpException("Failed to send switch command to light $lightId: HTTP ${response.status.value}")
+        }
+    }
+
+    /**
+     * Sets the brightness for a specific light.
+     *
+     * @param lightId The ID of the light.
+     * @param value The brightness value to set (0-100).
+     * @throws RemoteOpException If the HTTP request fails or the response indicates an error.
+     */
+    private suspend fun setBrightnessForLight(lightId: String, value: Int) {
+        val url = "http://$hostname/rpc/Light.Set?id=$lightId&brightness=$value"
+        val response: HttpResponse = client.get(url)
+
+        if (response.status.value !in 200..299) {
+            throw RemoteOpException("Failed to set brightness for light $lightId: HTTP ${response.status.value}")
         }
     }
 }

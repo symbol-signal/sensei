@@ -8,6 +8,8 @@ import symsig.sensei.device.ChildScopeDimmer
 import symsig.sensei.device.Presence
 import symsig.sensei.device.PresenceSensors
 import symsig.sensei.device.ShellyPro2PMDimmerHttp
+import symsig.sensei.device.ShellyPro2PMDimmerHttp.Companion.LIGHT_0
+import symsig.sensei.device.ShellyPro2PMDimmerHttp.Companion.LIGHT_1
 import symsig.sensei.`interface`.WebSocketServer
 import symsig.sensei.util.timer.DebounceScheduler
 import java.time.Duration.ofSeconds
@@ -15,8 +17,15 @@ import java.time.LocalTime
 
 private val log = KotlinLogging.logger {}
 
-private val wakeupTime = LocalTime.of(6, 30)
-private val eveningToNight = LocalTime.of(18, 0)..LocalTime.of(22, 0)
+private val morningStart = LocalTime.of(6, 30)
+private val eveningStart = LocalTime.of(18, 0)
+private val nightStart = LocalTime.of(22, 0)
+private val eveningToNight = eveningStart..nightStart
+
+fun isBetweenNightMorning(): Boolean {
+    val now = LocalTime.now()
+    return now.isAfter(nightStart) && now.isBefore(morningStart)
+}
 
 fun main() {
     val appScope = createAppCoroutineScope()
@@ -34,28 +43,24 @@ fun main() {
     bathroomSensor.addListener { event ->
         when (event.presence) {
             Presence.PRESENT -> {
-                appScope.launch { bathroomDimmer.lightOn("1") }
-                debounceScheduler.schedule(ofSeconds(8)) { bathroomDimmer.lightOn("0") }
+                appScope.launch { bathroomDimmer.lights(LIGHT_1).lightOn() }
+
+                val light0Delay: Long = if (isBetweenNightMorning()) 0 else 8
+                debounceScheduler.schedule(ofSeconds(light0Delay)) { bathroomDimmer.lights(LIGHT_0).lightOn() }
             }
             Presence.ABSENT -> {
-                appScope.launch { bathroomDimmer.lightOff("1") }
-                debounceScheduler.schedule(ofSeconds(3)) { bathroomDimmer.lightOff("0") }
+                appScope.launch { bathroomDimmer.lights(LIGHT_1).lightOff() }
+
+                val light0Delay: Long = if (isBetweenNightMorning()) 0 else 3
+                debounceScheduler.schedule(ofSeconds(light0Delay)) { bathroomDimmer.lights(LIGHT_0).lightOff() }
             }
             Presence.UNKNOWN -> log.warn { "[unknown_presence_state] sensor=[$bathroomSensor]" }
         }
-        appScope.launch {
-            when (event.presence) {
-                Presence.PRESENT -> bathroomDimmer.lightOn("1")
-                Presence.ABSENT -> bathroomDimmer.lightOff("1")
-                Presence.UNKNOWN -> log.warn { "[unknown_presence_state] sensor=[$bathroomSensor]" }
-            }
-        }
-
     }
 
-    bathroomDimmer.jobs.create().setBrightnessDaily(wakeupTime, 100, "0", "1").start()
-    bathroomDimmer.jobs.create().adjustBrightnessLinearly(eveningToNight, 100 downTo 15, "0").start()
-    bathroomDimmer.jobs.create().adjustBrightnessLinearly(eveningToNight, 100 downTo 0,  "1").start()
+    bathroomDimmer.jobs.create().adjustBrightnessLinearly(eveningToNight, 100 downTo 10, LIGHT_0).start()
+    bathroomDimmer.jobs.create().adjustBrightnessLinearly(eveningToNight, 100 downTo 0,  LIGHT_1).start()
+    bathroomDimmer.jobs.create().setBrightnessDaily(morningStart, 100, LIGHT_0, LIGHT_1).start()
 
     wsServer.start()
     log.info { "[ws_server_started]" }
