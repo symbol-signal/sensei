@@ -4,12 +4,12 @@ import io.github.oshai.kotlinlogging.KotlinLogging
 import io.ktor.client.*
 import io.ktor.client.engine.cio.*
 import kotlinx.coroutines.*
-import symsig.sensei.device.ChildScopeDimmer
 import symsig.sensei.device.Presence
 import symsig.sensei.device.PresenceSensors
-import symsig.sensei.device.ShellyPro2PMDimmerHttp
-import symsig.sensei.device.ShellyPro2PMDimmerHttp.Companion.LIGHT_0
-import symsig.sensei.device.ShellyPro2PMDimmerHttp.Companion.LIGHT_1
+import symsig.sensei.device.dimmer.ChildScopeDimmer
+import symsig.sensei.device.dimmer.shelly.ShellyPro2PMDimmerHttp
+import symsig.sensei.device.dimmer.shelly.ShellyPro2PMDimmerHttp.Companion.LIGHT_0
+import symsig.sensei.device.dimmer.shelly.ShellyPro2PMDimmerHttp.Companion.LIGHT_1
 import symsig.sensei.`interface`.WebSocketServer
 import symsig.sensei.util.timer.DebounceScheduler
 import java.time.Duration.ofSeconds
