@@ -51,14 +51,18 @@ interface PresenceSensor {
     val sensorId: String
     val presence: Presence
     val lastChanged: Instant?
+    val isUpdatable: Boolean
 
     fun addListener(listener: PresenceChangeEventListener)
     fun removeListener(listener: PresenceChangeEventListener)
-}
 
-interface PresenceSensorUpdatable : PresenceSensor {
-
-    fun requestUpdate()
+    fun requestUpdate() {
+        if (isUpdatable) {
+            throw AssertionError("Sensor $sensorId is updatable but does not override `requestUpdate` function")
+        } else {
+            throw IllegalStateException("Sensor $sensorId is not updatable")
+        }
+    }
 }
 
 class PresenceSensorCombined(override val sensorId: String, private vararg val sensors: PresenceSensor) :
@@ -69,6 +73,9 @@ class PresenceSensorCombined(override val sensorId: String, private vararg val s
 
     override var lastChanged: Instant? = null
         private set
+
+    override val isUpdatable: Boolean
+        get() = sensors.any { it.isUpdatable }
 
     private val listeners = CopyOnWriteArrayList<PresenceChangeEventListener>()
 
@@ -126,6 +133,8 @@ class PresenceSensorEventDriven(override val sensorId: String) : PresenceSensor 
     override var lastChanged: Instant? = null
         private set
 
+    override val isUpdatable = false
+
     private val listeners = CopyOnWriteArrayList<PresenceChangeEventListener>()
 
     private val stateLock = Any()
@@ -172,7 +181,9 @@ class PresenceSensorEventDriven(override val sensorId: String) : PresenceSensor 
 class PresenceSensorEventDrivenUpdatable(
     private val baseSensor: PresenceSensorEventDriven,
     private val updateRequestHandler: (String) -> Unit
-) : PresenceSensor by baseSensor, PresenceSensorUpdatable {
+) : PresenceSensor by baseSensor {
+
+    override val isUpdatable = true
 
     override fun requestUpdate() {
         updateRequestHandler(baseSensor.sensorId)
@@ -229,7 +240,7 @@ object PresenceSensors {
     fun sensord(
         sensorId: String,
         remoteMessaging: PresenceSensorRemoteMessaging
-    ): PresenceSensorUpdatable {
+    ): PresenceSensor {
         val sensor = PresenceSensorEventDriven(sensorId)
         val msgConversion = PresenceSensorJsonPathMessageConversion("sensorId", "eventData.presence", "eventAt")
         remoteMessaging.addPresenceSensorMessageHandler(sensorMessageAdapter(sensor, msgConversion::invoke))
