@@ -61,6 +61,63 @@ interface PresenceSensorUpdatable : PresenceSensor {
     fun requestUpdate()
 }
 
+class PresenceSensorCombined(override val sensorId: String, private vararg val sensors: PresenceSensor) :
+    PresenceSensor {
+
+    override var presence: Presence = Presence.UNKNOWN
+        private set
+
+    override var lastChanged: Instant? = null
+        private set
+
+    private val listeners = CopyOnWriteArrayList<PresenceChangeEventListener>()
+
+    private val stateLock = Any()
+
+    fun combinedPresence(): Presence {
+        return when {
+            sensors.map { it.presence }.any { it == Presence.PRESENT } -> Presence.PRESENT
+            sensors.map { it.presence }.all { it == Presence.ABSENT } -> Presence.ABSENT
+            else -> Presence.UNKNOWN
+        }
+    }
+
+    private fun onEvent(event: PresenceChangeEvent) {
+        val combinedPresence = combinedPresence()
+        val stateChanged = synchronized(stateLock) {
+            if (combinedPresence != presence) {
+                presence = combinedPresence
+                lastChanged = event.changedAt
+                true
+            } else {
+                false
+            }
+        }
+
+        if (stateChanged) {
+            notifyListeners(PresenceChangeEvent(sensorId, combinedPresence, event.changedAt))
+        }
+    }
+
+    private fun notifyListeners(event: PresenceChangeEvent) {
+        for (listener in listeners) {
+            try {
+                listener(event)
+            } catch (e: Exception) {
+                log.error(e) { "[listener_error] sensor=[$sensorId] listener=[$listener]" }
+            }
+        }
+    }
+
+    override fun addListener(listener: (PresenceChangeEvent) -> Unit) {
+        listeners.add(listener)
+    }
+
+    override fun removeListener(listener: (PresenceChangeEvent) -> Unit) {
+        listeners.remove(listener)
+    }
+}
+
 class PresenceSensorEventDriven(override val sensorId: String) : PresenceSensor {
 
     override var presence: Presence = Presence.UNKNOWN
@@ -71,20 +128,26 @@ class PresenceSensorEventDriven(override val sensorId: String) : PresenceSensor 
 
     private val listeners = CopyOnWriteArrayList<PresenceChangeEventListener>()
 
+    private val stateLock = Any()
+
     fun newUpdate(message: PresenceChangeEvent) {
         if (message.sensorId != sensorId) {
             throw IllegalArgumentException("Sensor ID mismatch: expected [$sensorId], but got [${message.sensorId}]")
         }
 
-        val newPresence = message.presence
-        val updatedAt = message.changedAt
+        val stateChanged = synchronized(stateLock) {
+            if (message.presence != presence) {
+                presence = message.presence
+                lastChanged = message.changedAt
+                true
+            } else {
+                false
+            }
+        }
 
-        if (newPresence == presence) return
-
-        presence = newPresence
-        lastChanged = updatedAt
-
-        notifyListeners(message)
+        if (stateChanged) {
+            notifyListeners(message)
+        }
     }
 
     private fun notifyListeners(event: PresenceChangeEvent) {
