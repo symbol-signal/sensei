@@ -24,7 +24,7 @@ private val eveningToNight = eveningStart..nightStart
 
 fun isBetweenNightMorning(): Boolean {
     val now = LocalTime.now()
-    return now.isAfter(nightStart) && now.isBefore(morningStart)
+    return now.isAfter(nightStart) || now.isBefore(morningStart)
 }
 
 fun main() {
