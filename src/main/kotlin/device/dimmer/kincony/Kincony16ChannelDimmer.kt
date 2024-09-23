@@ -1,4 +1,4 @@
-package symsig.sensei.device.dimmer.shelly
+package symsig.sensei.device.dimmer.kincony
 
 import io.ktor.client.*
 import io.ktor.client.request.*
@@ -6,37 +6,60 @@ import io.ktor.client.statement.*
 import symsig.sensei.device.RemoteOpException
 import symsig.sensei.device.dimmer.Dimmer
 import symsig.sensei.device.dimmer.Light
+import symsig.sensei.device.dimmer.shelly.ShellyPro2PMDimmerHttp
 
-/**
- * Implementation of [Dimmer] for Shelly Pro 2PM dimmer via HTTP control.
- *
- * @property hostname The hostname or IP address of the Shelly Pro 2PM device.
- */
-class ShellyPro2PMDimmerHttp(private val hostname: String, private val client: HttpClient) : Dimmer {
+private val DEFAULT_RANGE = 0..100
+
+class Kincony16ChannelDimmer(
+    private val hostname: String,
+    private val password: String,
+    private val client: HttpClient,
+    private val workingRanges: Map<String, IntRange> = mapOf(),
+) : Dimmer {
+    
+    private val channelToBrightness = mutableMapOf<String, Int>()
 
     companion object {
-        const val LIGHT_0 = "0"
-        const val LIGHT_1 = "1"
-        val ALL_CHANNELS = setOf(LIGHT_0, LIGHT_1)
+        const val DIMMER_1 = "1"
+        const val DIMMER_2 = "2"
+        const val DIMMER_3 = "3"
+        const val DIMMER_4 = "4"
+        const val DIMMER_5 = "5"
+        const val DIMMER_6 = "6"
+        const val DIMMER_7 = "7"
+        const val DIMMER_8 = "8"
+        const val DIMMER_9 = "9"
+        const val DIMMER_10 = "10"
+        const val DIMMER_11 = "11"
+        const val DIMMER_12 = "12"
+        const val DIMMER_13 = "13"
+        const val DIMMER_14 = "14"
+        const val DIMMER_15 = "15"
+        const val DIMMER_16 = "16"
+
+        val ALL_CHANNELS = setOf(
+            DIMMER_1, DIMMER_2, DIMMER_3, DIMMER_4, DIMMER_5, DIMMER_6, DIMMER_7, DIMMER_8,
+            DIMMER_9, DIMMER_10, DIMMER_11, DIMMER_12, DIMMER_13, DIMMER_14, DIMMER_15, DIMMER_16
+        )
     }
 
     /**
      * Returns a [Light] instance controlling the specified [lightIds].
      */
     override fun lights(vararg lightIds: String): Light {
-        return ShellyLights(lightIds.toSet())
+        return KinconyLights(lightIds.toSet())
     }
 
     override suspend fun lightOn() {
-        ShellyLights(ALL_CHANNELS).lightOn()
+        KinconyLights(ShellyPro2PMDimmerHttp.ALL_CHANNELS).lightOn()
     }
 
     override suspend fun lightOff() {
-        ShellyLights(ALL_CHANNELS).lightOff()
+        KinconyLights(ShellyPro2PMDimmerHttp.ALL_CHANNELS).lightOff()
     }
 
     override suspend fun setBrightness(value: Int) {
-        ShellyLights(ALL_CHANNELS).setBrightness(value)
+        KinconyLights(ShellyPro2PMDimmerHttp.ALL_CHANNELS).setBrightness(value)
     }
 
     /**
@@ -47,12 +70,8 @@ class ShellyPro2PMDimmerHttp(private val hostname: String, private val client: H
      * @throws RemoteOpException If the HTTP request fails or the response indicates an error.
      */
     private suspend fun sendSwitchCommand(lightId: String, on: Boolean) {
-        val url = "http://$hostname/rpc/Light.Set?id=$lightId&on=$on"
-        val response: HttpResponse = client.get(url)
-
-        if (response.status.value !in 200..299) {
-            throw RemoteOpException("Failed to send switch command to light $lightId: HTTP ${response.status.value}")
-        }
+        val brightness = if (on) 100 else 0
+        setBrightnessForLight(lightId, brightness)
     }
 
     /**
@@ -63,7 +82,8 @@ class ShellyPro2PMDimmerHttp(private val hostname: String, private val client: H
      * @throws RemoteOpException If the HTTP request fails or the response indicates an error.
      */
     private suspend fun setBrightnessForLight(lightId: String, value: Int) {
-        val url = "http://$hostname/rpc/Light.Set?id=$lightId&brightness=$value"
+        val mappedValue = mapToRange(value, workingRanges[lightId] ?: DEFAULT_RANGE)
+        val url = "http://$hostname/dimmer_ctl.cgi?Dimmer$lightId=$mappedValue&postpwd=$password"
         val response: HttpResponse = client.get(url)
 
         if (response.status.value !in 200..299) {
@@ -71,10 +91,12 @@ class ShellyPro2PMDimmerHttp(private val hostname: String, private val client: H
         }
     }
 
-    /**
-     * Inner class implementing [Light], controlling specific light IDs.
-     */
-    inner class ShellyLights(private val lightIds: Set<String>) : Light {
+    private fun mapToRange(value: Int, range: IntRange): Int {
+        val rangeLength = range.last - range.first
+        return ((rangeLength / 100.0) * value + range.first).toInt()
+    }
+
+    inner class KinconyLights(private val lightIds: Set<String>) : Light {
 
         /**
          * Turns on the specified lights.
