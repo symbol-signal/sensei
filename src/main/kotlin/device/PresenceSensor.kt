@@ -65,7 +65,7 @@ interface PresenceSensor {
     }
 }
 
-class PresenceSensorCombined(override val sensorId: String, private vararg val sensors: PresenceSensor) :
+private class PresenceSensorCombined(override val sensorId: String, private vararg val sensors: PresenceSensor) :
     PresenceSensor {
 
     override var presence: Presence = Presence.UNKNOWN
@@ -89,7 +89,7 @@ class PresenceSensorCombined(override val sensorId: String, private vararg val s
         }
     }
 
-    private fun onEvent(event: PresenceChangeEvent) {
+    internal fun onEvent(event: PresenceChangeEvent) {
         val combinedPresence = combinedPresence()
         val stateChanged = synchronized(stateLock) {
             if (combinedPresence != presence) {
@@ -123,6 +123,14 @@ class PresenceSensorCombined(override val sensorId: String, private vararg val s
     override fun removeListener(listener: (PresenceChangeEvent) -> Unit) {
         listeners.remove(listener)
     }
+}
+
+fun combinedPresenceSensor(sensorId: String, vararg sensors: PresenceSensor): PresenceSensor {
+    val sensor = PresenceSensorCombined(sensorId, *sensors)
+    for (s in sensors) {
+        s.addListener(sensor::onEvent)
+    }
+    return sensor
 }
 
 class PresenceSensorEventDriven(override val sensorId: String) : PresenceSensor {

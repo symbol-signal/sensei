@@ -6,6 +6,7 @@ import io.ktor.client.engine.cio.*
 import kotlinx.coroutines.*
 import symsig.sensei.device.Presence
 import symsig.sensei.device.PresenceSensors
+import symsig.sensei.device.combinedPresenceSensor
 import symsig.sensei.device.dimmer.ChildScopeDimmer
 import symsig.sensei.device.dimmer.shelly.ShellyPro2PMDimmerHttp
 import symsig.sensei.device.dimmer.shelly.ShellyPro2PMDimmerHttp.Companion.LIGHT_0
@@ -32,7 +33,9 @@ fun main() {
 
     val wsServer = WebSocketServer(8080)
 
-    val bathroomSensor = PresenceSensors.sensord("sen0395/bathroom", wsServer)
+    val bathroomMainSensor = PresenceSensors.sensord("sen0395/bathroom", wsServer)
+    val bathroomShowerSensor = PresenceSensors.sensord("sen0311/shower", wsServer)
+    val bathroomSensor = combinedPresenceSensor("combined/bathroom", bathroomMainSensor, bathroomShowerSensor)
     bathroomSensor.addListener { event ->
         log.info { "[sensor_event] sensorId=[${event.sensorId}], presence=[${event.presence}], changedAt=[${event.changedAt}]" }
     }
