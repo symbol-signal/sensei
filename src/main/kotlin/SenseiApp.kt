@@ -8,6 +8,11 @@ import symsig.sensei.device.Presence
 import symsig.sensei.device.PresenceSensors
 import symsig.sensei.device.combinedPresenceSensor
 import symsig.sensei.device.dimmer.ChildScopeDimmer
+import symsig.sensei.device.dimmer.kincony.Kincony16ChannelDimmer
+import symsig.sensei.device.dimmer.kincony.Kincony16ChannelDimmer.Companion.DIMMER_01
+import symsig.sensei.device.dimmer.kincony.Kincony16ChannelDimmer.Companion.DIMMER_02
+import symsig.sensei.device.dimmer.kincony.Kincony16ChannelDimmer.Companion.DIMMER_03
+import symsig.sensei.device.dimmer.kincony.Kincony16ChannelDimmer.Companion.DIMMER_06
 import symsig.sensei.device.dimmer.shelly.ShellyPro2PMDimmerHttp
 import symsig.sensei.device.dimmer.shelly.ShellyPro2PMDimmerHttp.Companion.LIGHT_0
 import symsig.sensei.device.dimmer.shelly.ShellyPro2PMDimmerHttp.Companion.LIGHT_1
@@ -64,6 +69,18 @@ fun main() {
     bathroomDimmer.jobs.create().adjustBrightnessLinearly(eveningToNight, 100 downTo 10, LIGHT_0).start()
     bathroomDimmer.jobs.create().adjustBrightnessLinearly(eveningToNight, 100 downTo 0,  LIGHT_1).start()
     bathroomDimmer.jobs.create().setBrightnessDaily(morningStart, 100, LIGHT_0, LIGHT_1).start()
+
+    val mainDimmer = Kincony16ChannelDimmer(
+        "192.168.0.229",
+        "12345",
+        HttpClient(CIO),
+        mapOf(
+            DIMMER_01 to 17..45,
+            DIMMER_02 to 10..40,
+            DIMMER_03 to 20..32,
+            DIMMER_06 to 21..41,
+        )
+    )
 
     wsServer.start()
     log.info { "[ws_server_started]" }

@@ -20,15 +20,15 @@ class Kincony16ChannelDimmer(
     private val channelToBrightness = mutableMapOf<String, Int>()
 
     companion object {
-        const val DIMMER_1 = "1"
-        const val DIMMER_2 = "2"
-        const val DIMMER_3 = "3"
-        const val DIMMER_4 = "4"
-        const val DIMMER_5 = "5"
-        const val DIMMER_6 = "6"
-        const val DIMMER_7 = "7"
-        const val DIMMER_8 = "8"
-        const val DIMMER_9 = "9"
+        const val DIMMER_01 = "01"
+        const val DIMMER_02 = "02"
+        const val DIMMER_03 = "03"
+        const val DIMMER_04 = "04"
+        const val DIMMER_05 = "05"
+        const val DIMMER_06 = "06"
+        const val DIMMER_07 = "07"
+        const val DIMMER_08 = "08"
+        const val DIMMER_09 = "09"
         const val DIMMER_10 = "10"
         const val DIMMER_11 = "11"
         const val DIMMER_12 = "12"
@@ -38,8 +38,8 @@ class Kincony16ChannelDimmer(
         const val DIMMER_16 = "16"
 
         val ALL_CHANNELS = setOf(
-            DIMMER_1, DIMMER_2, DIMMER_3, DIMMER_4, DIMMER_5, DIMMER_6, DIMMER_7, DIMMER_8,
-            DIMMER_9, DIMMER_10, DIMMER_11, DIMMER_12, DIMMER_13, DIMMER_14, DIMMER_15, DIMMER_16
+            DIMMER_01, DIMMER_02, DIMMER_03, DIMMER_04, DIMMER_05, DIMMER_06, DIMMER_07, DIMMER_08,
+            DIMMER_09, DIMMER_10, DIMMER_11, DIMMER_12, DIMMER_13, DIMMER_14, DIMMER_15, DIMMER_16
         )
     }
 
@@ -70,8 +70,7 @@ class Kincony16ChannelDimmer(
      * @throws RemoteOpException If the HTTP request fails or the response indicates an error.
      */
     private suspend fun sendSwitchCommand(lightId: String, on: Boolean) {
-        val brightness = if (on) 100 else 0
-        setBrightnessForLight(lightId, brightness)
+        setBrightnessForLight(lightId, if (on) 100 else 0)
     }
 
     /**
@@ -92,6 +91,9 @@ class Kincony16ChannelDimmer(
     }
 
     private fun mapToRange(value: Int, range: IntRange): Int {
+        if (value == 0) {
+            return 0  // Use 0 for turning off
+        }
         val rangeLength = range.last - range.first
         return ((rangeLength / 100.0) * value + range.first).toInt()
     }
