@@ -3,6 +3,9 @@ package symsig.sensei.device.dimmer.kincony
 import io.ktor.client.*
 import io.ktor.client.request.*
 import io.ktor.client.statement.*
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
 import symsig.sensei.device.RemoteOpException
 import symsig.sensei.device.dimmer.Dimmer
 import symsig.sensei.device.dimmer.Light
@@ -14,10 +17,14 @@ class Kincony16ChannelDimmer(
     private val hostname: String,
     private val password: String,
     private val client: HttpClient,
-    private val workingRanges: Map<String, IntRange> = mapOf(),
+    effectiveRanges: Map<String, IntRange> = mapOf(),
+    currentBrightness: Map<String, Int> = mapOf(),
 ) : Dimmer {
-    
-    private val channelToBrightness = mutableMapOf<String, Int>()
+
+    private val effectiveRanges: Map<String, IntRange> = effectiveRanges.toMap()
+
+    @Volatile
+    private var currentBrightness: Map<String, Int> = currentBrightness.toMap()
 
     companion object {
         const val DIMMER_01 = "01"
@@ -70,7 +77,7 @@ class Kincony16ChannelDimmer(
      * @throws RemoteOpException If the HTTP request fails or the response indicates an error.
      */
     private suspend fun sendSwitchCommand(lightId: String, on: Boolean) {
-        setBrightnessForLight(lightId, if (on) 100 else 0)
+        setBrightnessForLight(lightId, if (on) currentBrightness[lightId] ?: 100 else 0)
     }
 
     /**
@@ -81,13 +88,19 @@ class Kincony16ChannelDimmer(
      * @throws RemoteOpException If the HTTP request fails or the response indicates an error.
      */
     private suspend fun setBrightnessForLight(lightId: String, value: Int) {
-        val mappedValue = mapToRange(value, workingRanges[lightId] ?: DEFAULT_RANGE)
-        val url = "http://$hostname/dimmer_ctl.cgi?Dimmer$lightId=$mappedValue&postpwd=$password"
+        val effectiveValue = mapToRange(value, effectiveRanges[lightId] ?: DEFAULT_RANGE)
+        val url = "http://$hostname/dimmer_ctl.cgi?Dimmer$lightId=$effectiveValue&postpwd=$password"
         val response: HttpResponse = client.get(url)
 
         if (response.status.value !in 200..299) {
-            throw RemoteOpException("Failed to set brightness for light $lightId: HTTP ${response.status.value}")
+            throw RemoteOpException("Failed to set brightness for light $lightId, error code: HTTP ${response.status.value}")
         }
+        val respBody = response.bodyAsText()
+        if (!respBody.startsWith("DimmerCallback(") && respBody.endsWith(");")) {
+            throw RemoteOpException("Failed to set brightness for light $lightId, unexpected response: $respBody")
+        }
+
+        setCurrentBrightness(respBody)
     }
 
     private fun mapToRange(value: Int, range: IntRange): Int {
@@ -96,6 +109,15 @@ class Kincony16ChannelDimmer(
         }
         val rangeLength = range.last - range.first
         return ((rangeLength / 100.0) * value + range.first).toInt()
+    }
+
+    private fun setCurrentBrightness(dimmerResponse: String) {
+        val jsonPartStr = dimmerResponse.removePrefix("DimmerCallback(").removeSuffix(");")
+        val jsonPartObj = Json.parseToJsonElement(jsonPartStr).jsonObject
+
+        currentBrightness = jsonPartObj
+            .filterKeys { it.startsWith("Dimmer") }
+            .mapValues { (_, element) -> element.jsonPrimitive.content.toInt() }
     }
 
     inner class KinconyLights(private val lightIds: Set<String>) : Light {
