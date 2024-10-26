@@ -13,6 +13,8 @@ import symsig.sensei.device.dimmer.shelly.ShellyPro2PMDimmerHttp
 
 private val DEFAULT_RANGE = 0..100
 
+private fun isDimmerValueResponse(respBody: String)  = respBody.startsWith("DimmerCallback(") && respBody.endsWith(");")
+
 class Kincony16ChannelDimmer(
     private val hostname: String,
     private val password: String,
@@ -96,7 +98,7 @@ class Kincony16ChannelDimmer(
             throw RemoteOpException("Failed to set brightness for light $lightId, error code: HTTP ${response.status.value}")
         }
         val respBody = response.bodyAsText()
-        if (!respBody.startsWith("DimmerCallback(") && respBody.endsWith(");")) {
+        if (!isDimmerValueResponse(respBody)) {
             throw RemoteOpException("Failed to set brightness for light $lightId, unexpected response: $respBody")
         }
 
@@ -118,6 +120,21 @@ class Kincony16ChannelDimmer(
         currentBrightness = jsonPartObj
             .filterKeys { it.startsWith("Dimmer") }
             .mapValues { (_, element) -> element.jsonPrimitive.content.toInt() }
+    }
+
+    suspend fun refreshCurrentBrightnessValues() {
+        val url = "http://$hostname/dimmer_ctl.cgi?DimmerFF=RD&postpwd=$password"
+        val response: HttpResponse = client.get(url)
+
+        val respBody = response.bodyAsText()
+        if (response.status.value !in 200..299) {
+            throw RemoteOpException("Failed to update brightness values, error code: HTTP ${response.status.value}")
+        }
+        if (!isDimmerValueResponse(respBody)) {
+            throw RemoteOpException("Failed to update brightness values, unexpected response: $respBody")
+        }
+
+        setCurrentBrightness(respBody)
     }
 
     inner class KinconyLights(private val lightIds: Set<String>) : Light {
