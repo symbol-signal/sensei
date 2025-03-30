@@ -46,7 +46,7 @@ fun main() {
     }
 
     val httpClient = HttpClient(CIO)
-    val bathroomDimmer = ChildScopeDimmer(appScope, ShellyPro2PMDimmerHttp("shellyprodm2pm-08f9e0e49950", httpClient))
+    val bathroomDimmer = ChildScopeDimmer(appScope, ShellyPro2PMDimmerHttp("shellyprodm2pm-2cbcbba41ed8", httpClient))
     val debounceScheduler = DebounceScheduler(appScope)
     bathroomSensor.addListener { event ->
         when (event.presence) {
