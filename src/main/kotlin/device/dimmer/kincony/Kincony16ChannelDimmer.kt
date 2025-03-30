@@ -1,8 +1,10 @@
 package symsig.sensei.device.dimmer.kincony
 
 import io.ktor.client.*
+import io.ktor.client.engine.cio.*
 import io.ktor.client.request.*
 import io.ktor.client.statement.*
+import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
@@ -175,4 +177,34 @@ class Kincony16ChannelDimmer(
             }
         }
     }
+
+    fun main() {
+        runBlocking {
+            val dimmer = Kincony16ChannelDimmer(
+                "192.168.0.229",
+                "12345",
+                HttpClient(CIO),
+                mapOf(
+                    DIMMER_01 to 17..45,
+                    DIMMER_02 to 10..40,
+                    DIMMER_03 to 20..32,
+                    DIMMER_06 to 21..41,
+                )
+            )
+//        dimmer.lights(DIMMER_01, DIMMER_02, DIMMER_03, DIMMER_06).lightOff()
+//        dimmer.lights(DIMMER_03).lightOn()
+//        delay(500)
+            /*        for (brightness in 100 downTo 0 step 10) {
+                        dimmer.lights(DIMMER_08).setBrightness(brightness)
+                        delay(50) // 100ms delay
+                    }*/
+
+//        dimmer.lights(DIMMER_08).lightOn()
+//        dimmer.lights(DIMMER_08).lightOn()
+//        dimmer.lights(DIMMER_08).setBrightness(100)
+            dimmer.lights(DIMMER_01).lightOff()
+
+        }
+    }
+
 }

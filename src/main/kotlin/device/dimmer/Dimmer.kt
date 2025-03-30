@@ -6,8 +6,10 @@ import symsig.sensei.device.RemoteOpException
 import symsig.sensei.util.timer.DailyTimer
 import symsig.sensei.util.timer.LinearSequenceTimer
 import symsig.sensei.util.timer.SequenceUpdate
+import java.time.Duration
 import java.time.LocalTime
 import java.util.concurrent.CopyOnWriteArrayList
+import kotlin.time.toKotlinDuration
 
 /**
  * Interface for controlling a dimmer.
@@ -43,40 +45,18 @@ interface Dimmer : Light {
 
     fun lights(vararg lightIds: String): Light
 }
-
-interface ManagedDimmer : Dimmer {
-
-    val jobs: DimmerJobs
-
-    fun cancel()
-}
-
-open class ChildScopeDimmer(parentScope: CoroutineScope, dimmer: Dimmer) : Dimmer by dimmer, ManagedDimmer {
-
-    protected val job = SupervisorJob(parentScope.coroutineContext[Job])
-    protected val scope = parentScope + job
-
-    override val jobs = DimmerJobs(scope, dimmer)
-
-    override fun cancel() {
-        job.cancel()
-    }
-}
-
-class DimmerJobs(private val scope: CoroutineScope, private val dimmer: Dimmer) {
-
+class DimmerJobs<D : Dimmer>(
+    private val scope: CoroutineScope,
+    private val dimmer: D
+) {
     private val log = KotlinLogging.logger {}
-
     private val factory = DimmerJobsFactory()
-
     private val _active = CopyOnWriteArrayList<DimmerJob>()
-
     val active: List<DimmerJob> get() = _active.toList()
 
     fun create() = factory
 
     abstract inner class DimmerJob(val jobName: String) {
-
         private var job: Job? = null
         val isActive get() = job?.isActive == true
 
@@ -100,15 +80,30 @@ class DimmerJobs(private val scope: CoroutineScope, private val dimmer: Dimmer) 
         fun cancel() {
             val currentJob = job
             check(currentJob != null && currentJob.isActive) { "No active $jobName job to cancel" }
-
             currentJob.cancel()
-
             log.info { "[dimmer_job_cancelled] job_name=[$jobName]" }
         }
     }
 
-    inner class DimmerJobsFactory {
+    inner class CustomDimmerJob(
+        private val interval: Duration,
+        private val action: suspend (D) -> Unit,
+        customJobName: String? = null
+    ) : DimmerJob(customJobName ?: "custom_scheduled_job") {
 
+        override suspend fun execute() {
+            while (isActive) {
+                try {
+                    action(dimmer)
+                    delay(interval.toKotlinDuration())
+                } catch (e: Exception) {
+                    log.error(e) { "[custom_dimmer_job_failed] job_name=[${jobName}]" }
+                }
+            }
+        }
+    }
+
+    inner class DimmerJobsFactory {
         fun setBrightnessDaily(at: LocalTime, brightnessValue: Int, vararg lightIds: String): SetBrightnessDailyJob {
             return SetBrightnessDailyJob(at, brightnessValue, lightIds.toSet())
         }
@@ -119,6 +114,14 @@ class DimmerJobs(private val scope: CoroutineScope, private val dimmer: Dimmer) 
             vararg lightIds: String
         ): LinearBrightnessAdjustmentJob {
             return LinearBrightnessAdjustmentJob(between, brightness, lightIds.toSet())
+        }
+
+        fun schedule(
+            interval: Duration,
+            jobName: String? = null,
+            action: suspend (D) -> Unit
+        ): CustomDimmerJob {
+            return CustomDimmerJob(interval, action, jobName)
         }
     }
 
@@ -160,5 +163,26 @@ class DimmerJobs(private val scope: CoroutineScope, private val dimmer: Dimmer) 
                 log.error(e) { "[scheduled_dimmer_brightness_adjustment_failed]" }
             }
         }
+    }
+}
+
+// Update the ManagedDimmer interface to be generic
+interface ManagedDimmer<D : Dimmer> : Dimmer {
+    val jobs: DimmerJobs<D>
+    fun cancel()
+}
+
+// Update ChildScopeDimmer to be generic
+open class ChildScopeDimmer<D : Dimmer>(
+    parentScope: CoroutineScope,
+    dimmer: D
+) : Dimmer by dimmer, ManagedDimmer<D> {
+    protected val job = SupervisorJob(parentScope.coroutineContext[Job])
+    protected val scope = parentScope + job
+
+    override val jobs = DimmerJobs(scope, dimmer)
+
+    override fun cancel() {
+        job.cancel()
     }
 }
