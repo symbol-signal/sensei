@@ -8,25 +8,35 @@ import kotlinx.coroutines.flow.drop
 private val log = KotlinLogging.logger {}
 
 fun main() {
-    val client = MqttClient("central.local", 1883) { /* auth/logging if you need */ }
-    val appScope = createAppCoroutineScope()
+    runMqttApplication("central.local", 1883) { client ->
+        val bathroomSwitch = Switch(client, "home/bathroom/switch/2/state", this)
 
-    val application = appScope.launch {
+        launch {
+            bathroomSwitch.state
+                .drop(1)
+                .collect { state ->
+                    println("--> Received new state for bathroom switch: $state")
+                }
+        }
+    }
+}
+
+fun runMqttApplication(host: String, port: Int, block: suspend CoroutineScope.(MqttClient) -> Unit) {
+    val scope = CoroutineScope(
+        SupervisorJob() +
+                CoroutineExceptionHandler { _, throwable ->
+                    log.error(throwable) { "unhandled_coroutine_exception" }
+                }
+    )
+
+    val app = scope.launch {
+        val client = MqttClient(host, port) {}
         val connAck = client.connect().getOrThrow()
         require(connAck.isSuccess) { "MQTT connect failed: $connAck" }
         log.info { "mqtt_connected" }
 
         try {
-            coroutineScope { // THIS waits for all children to complete
-                val bathroomSwitch = Switch(client, "home/bathroom/switch/2/state", this)
-                launch {
-                    bathroomSwitch.state
-                        .drop(1)
-                        .collect { state ->
-                            println("--> Received new state for bathroom switch: $state")
-                        }
-                }
-            }
+            coroutineScope { block(client) }
         } finally {
             withContext(NonCancellable) {
                 client.disconnect()
@@ -38,17 +48,9 @@ fun main() {
     Runtime.getRuntime().addShutdownHook(Thread {
         log.info { "shutdown_sequence_executed" }
         runBlocking {
-            application.cancel()
-            application.join()
+            app.cancelAndJoin()
         }
     })
 
-    runBlocking { application.join() }
-}
-
-private fun createAppCoroutineScope(): CoroutineScope {
-    val excHandler = CoroutineExceptionHandler { _, throwable ->
-        log.error(throwable) { "unhandled_coroutine_exception" }
-    }
-    return CoroutineScope(SupervisorJob() + excHandler)
+    runBlocking { app.join() }
 }
