@@ -1,4 +1,4 @@
-package symsig
+package symsig.sensei
 
 import de.kempmobil.ktor.mqtt.MqttClient
 import de.kempmobil.ktor.mqtt.buildFilterList
