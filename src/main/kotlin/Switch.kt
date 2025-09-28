@@ -33,7 +33,7 @@ class Switch(private val mqtt: MqttClient, private val topic: String, scope: Cor
             .filter { it.topic.name == topic }
             .map { State.parse(it.payload) }
             .distinctUntilChanged()
-            .stateIn(scope, SharingStarted.Eagerly, State.UNKNOWN)
+            .stateIn(scope, SharingStarted.WhileSubscribed(), State.UNKNOWN)
 
     init {
         scope.launch { mqtt.subscribe(buildFilterList { +topic }) }

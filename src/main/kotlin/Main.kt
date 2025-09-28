@@ -1,9 +1,12 @@
 package symsig.sensei
 
+import de.kempmobil.ktor.mqtt.Disconnected
 import de.kempmobil.ktor.mqtt.MqttClient
 import io.github.oshai.kotlinlogging.KotlinLogging
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.drop
+import kotlinx.coroutines.flow.first
+import kotlin.time.Duration.Companion.seconds
 
 private val log = KotlinLogging.logger {}
 
@@ -22,35 +25,49 @@ fun main() {
 }
 
 fun runMqttApplication(host: String, port: Int, block: suspend CoroutineScope.(MqttClient) -> Unit) {
-    val scope = CoroutineScope(
-        SupervisorJob() +
-                CoroutineExceptionHandler { _, throwable ->
-                    log.error(throwable) { "unhandled_coroutine_exception" }
-                }
-    )
+    runBlocking {
+        val job = coroutineContext.job
 
-    val app = scope.launch {
-        val client = MqttClient(host, port) {}
-        val connAck = client.connect().getOrThrow()
-        require(connAck.isSuccess) { "MQTT connect failed: $connAck" }
-        log.info { "mqtt_connected" }
-
-        try {
-            coroutineScope { block(client) }
-        } finally {
-            withContext(NonCancellable) {
-                client.disconnect()
-                log.info { "mqtt_disconnected" }
+        Runtime.getRuntime().addShutdownHook(Thread {
+            log.info { "shutdown_sequence_executed" }
+            runBlocking {
+                job.cancel()
+                job.join() // Wait for the main coroutine to complete its cleanup!
             }
+        })
+
+        var reconnecting = false
+        while (isActive) {
+            val client = MqttClient(host, port) {}
+
+            try {
+                val result = client.connect()
+                if (result.isSuccess && result.getOrNull()?.isSuccess == true) {
+                    log.info { "mqtt_connected" }
+
+                    coroutineScope {
+                        launch { block(client) }
+                        reconnecting = false
+                        client.connectionState.first { it is Disconnected }  // Wait for disconnection
+
+                        log.warn { "mqtt_disconnected" }
+                        coroutineContext.cancelChildren()
+                    }
+                } else {
+                    if (!reconnecting) {
+                        log.error { "mqtt_connect_failed reason=[${result.exceptionOrNull() ?: result.getOrNull()?.reason}]" }
+                    }
+                }
+            } catch (_: CancellationException) {
+                break
+            } finally {
+                client.close()
+                if (!reconnecting) { log.info { "mqtt_client_closed" } }
+            }
+
+            if (!reconnecting) { log.info { "mqtt_reconnecting" } }
+            delay(10.seconds)
+            reconnecting = true
         }
     }
-
-    Runtime.getRuntime().addShutdownHook(Thread {
-        log.info { "shutdown_sequence_executed" }
-        runBlocking {
-            app.cancelAndJoin()
-        }
-    })
-
-    runBlocking { app.join() }
 }
