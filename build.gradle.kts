@@ -1,6 +1,7 @@
 plugins {
     kotlin("jvm") version "2.2.10"
     application
+    kotlin("plugin.serialization") version "1.9.20"
     id("com.github.johnrengelman.shadow") version "8.1.1"
 }
 
@@ -13,9 +14,10 @@ repositories {
 
 dependencies {
     implementation("io.github.oshai:kotlin-logging-jvm:7.0.13")
-    implementation("ch.qos.logback:logback-classic:1.5.18")
+    implementation("ch.qos.logback:logback-classic:1.5.19")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.10.2")
     implementation("org.jetbrains.kotlinx:kotlinx-io-core:0.8.0")
+    implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.9.0")
     implementation("de.kempmobil.ktor.mqtt:mqtt-core:0.7.0")
     implementation("de.kempmobil.ktor.mqtt:mqtt-client:0.7.0")
     testImplementation(kotlin("test"))
@@ -28,6 +30,11 @@ application {
 tasks.test {
     useJUnitPlatform()
 }
+
 kotlin {
-    jvmToolchain(23)
+    jvmToolchain(17)
+}
+
+tasks.withType<JavaCompile> {
+    options.release.set(17)
 }

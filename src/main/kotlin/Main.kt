@@ -13,12 +13,13 @@ private val log = KotlinLogging.logger {}
 fun main() {
     runMqttApplication("central.local", 1883) { client ->
         val bathroomSwitch = Switch(client, "home/bathroom/switch/2/state", this)
+        val bathroomFan = ShellyPlus1PM(client, "shellyplus1pm-fan/rpc", this)
 
         launch {
             bathroomSwitch.state
                 .drop(1)
                 .collect { state ->
-                    println("--> Received new state for bathroom switch: $state")
+                    if (state == State.ON) bathroomFan.toggle()
                 }
         }
     }
@@ -31,8 +32,7 @@ fun runMqttApplication(host: String, port: Int, block: suspend CoroutineScope.(M
         Runtime.getRuntime().addShutdownHook(Thread {
             log.info { "shutdown_sequence_executed" }
             runBlocking {
-                job.cancel()
-                job.join() // Wait for the main coroutine to complete its cleanup!
+                job.cancelAndJoin()
             }
         })
 
