@@ -13,6 +13,40 @@ interface DimmerChannel {
     suspend fun turnOff()
 }
 
+/**
+ * A composite dimmer channel that controls multiple channels as a single unit.
+ *
+ * This class implements the Composite pattern, allowing multiple [DimmerChannel]
+ * instances to be controlled together. All operations are executed sequentially
+ * on each channel in the order they were provided.
+ *
+ * @property channels The list of channels to control together
+ *
+ * @constructor Creates a combined channel from a list of channels
+ */
+class CombinedChannel(private val channels: List<DimmerChannel>) : DimmerChannel {
+    /**
+     * Creates a combined channel from individual channel instances.
+     *
+     * @param channels Variable number of channels to combine
+     */
+    constructor(vararg channels: DimmerChannel) : this(channels.toList())
+
+    /**
+     * Turns on all channels sequentially.
+     */
+    override suspend fun turnOn() {
+        channels.forEach { it.turnOn() }
+    }
+
+    /**
+     * Turns off all channels sequentially.
+     */
+    override suspend fun turnOff() {
+        channels.forEach { it.turnOff() }
+    }
+}
+
 class ShellyPro2PMDimmer(private val mqtt: MqttClient, private val topic: String, scope: CoroutineScope) {
 
     @Serializable
@@ -47,5 +81,14 @@ class ShellyPro2PMDimmer(private val mqtt: MqttClient, private val topic: String
 
     fun channel(channel: Channel): DimmerChannel {
         return ShellyPro2PMChannel(channel)
+    }
+
+    /**
+     * Gets a controller that operates on all channels simultaneously.
+     *
+     * @return A [DimmerChannel] that controls all channels together
+     */
+    fun allChannels(): DimmerChannel {
+        return CombinedChannel(Channel.entries.map { channel(it) })
     }
 }
