@@ -11,7 +11,7 @@ interface Relay {
     suspend fun toggle()
 }
 
-class ShellyPlus1PM(private val mqtt: MqttClient, private val topic: String, scope: CoroutineScope) : Relay {
+class ShellyPlus1PMRelay(private val mqtt: MqttClient, private val topic: String, scope: CoroutineScope) : Relay {
 
     @Serializable
     data class ShellyRpc(val src: String = "cli", val method: String, val params: Map<String, Int>)

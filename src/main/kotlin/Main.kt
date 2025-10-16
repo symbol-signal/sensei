@@ -12,14 +12,16 @@ private val log = KotlinLogging.logger {}
 
 fun main() {
     runMqttApplication("central.local", 1883) { client ->
+        val dimmer = ShellyPro2PMDimmer(client, "shellyprodm2pm/rpc", this)
+
         val bathroomSwitch = Switch(client, "home/bathroom/switch/2/state", this)
-        val bathroomFan = ShellyPlus1PM(client, "shellyplus1pm-fan/rpc", this)
+        val bathroomFan = ShellyPlus1PMRelay(client, "shellyplus1pm-fan/rpc", this)
 
         launch {
             bathroomSwitch.state
                 .drop(1)
                 .collect { state ->
-                    if (state == State.ON) bathroomFan.toggle()
+                    if (state == SwitchState.ON) bathroomFan.toggle()
                 }
         }
     }
