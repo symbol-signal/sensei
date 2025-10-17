@@ -5,12 +5,30 @@ import de.kempmobil.ktor.mqtt.PublishRequest
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
+import kotlin.time.Duration
 
 interface DimmerChannel {
 
     suspend fun turnOn()
 
     suspend fun turnOff()
+}
+
+class DelayableChannel(private val channel: DimmerChannel, scope: CoroutineScope) : DimmerChannel {
+    private val scheduler = DebounceScheduler(scope)
+
+    override suspend fun turnOn() = turnOn(Duration.ZERO)
+    override suspend fun turnOff() = turnOff(Duration.ZERO)
+
+    fun turnOn(delay: Duration) {
+        scheduler.schedule(delay) { channel.turnOn() }
+    }
+
+    fun turnOff(delay: Duration) {
+        scheduler.schedule(delay) { channel.turnOff() }
+    }
+
+    fun cancel() = scheduler.cancel()
 }
 
 /**

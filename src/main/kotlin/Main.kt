@@ -6,6 +6,8 @@ import io.github.oshai.kotlinlogging.KotlinLogging
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.flow.first
+import symsig.sensei.ShellyPro2PMDimmer.Channel.Ch1
+import symsig.sensei.ShellyPro2PMDimmer.Channel.Ch2
 import kotlin.time.Duration.Companion.seconds
 
 private val log = KotlinLogging.logger {}
@@ -17,14 +19,19 @@ fun main() {
             client, "home/bathroom/binary_sensor/bathroom_mmwave/state", this
         )
         val bathroomShowerSensor = PresenceSensor(
-            client, "home/bathroom/binary_sensor/shower_presence/state", this, absentDelay = 3.seconds
+            client, "home/bathroom/binary_sensor/shower_presence/state", this, absentDelay = 6.seconds
         )
         val bathroomPresence = CombinedPresenceSensor(bathroomMainSensor, bathroomShowerSensor, scope = this)
         launch {
+            val mirrorChannel = DelayableChannel(dimmer.channel(Ch1), this)
+            val allChannels = CombinedChannel(dimmer.channel(Ch2), mirrorChannel)
             bathroomPresence.state.collect {
                 state -> when(state) {
-                    PresenceState.PRESENT -> dimmer.allChannels().turnOn()
-                    PresenceState.ABSENT, PresenceState.UNKNOWN -> dimmer.allChannels().turnOff()
+                    PresenceState.PRESENT -> {
+                        dimmer.channel(Ch2).turnOn()
+                        mirrorChannel.turnOn(3.seconds)
+                    }
+                    PresenceState.ABSENT, PresenceState.UNKNOWN -> allChannels.turnOff()
                 }
             }
         }
