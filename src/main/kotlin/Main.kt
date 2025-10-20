@@ -8,6 +8,8 @@ import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.flow.first
 import symsig.sensei.ShellyPro2PMDimmer.Channel.Ch1
 import symsig.sensei.ShellyPro2PMDimmer.Channel.Ch2
+import symsig.sensei.devices.dimmer.KinconyD16Dimmer
+import symsig.sensei.devices.dimmer.KinconyD16Dimmer.Channel
 import kotlin.time.Duration.Companion.seconds
 
 private val log = KotlinLogging.logger {}
@@ -25,8 +27,8 @@ fun main() {
         launch {
             val mirrorChannel = DelayableChannel(dimmer.channel(Ch1), this)
             val allChannels = CombinedChannel(dimmer.channel(Ch2), mirrorChannel)
-            bathroomPresence.state.collect {
-                state -> when(state) {
+            bathroomPresence.state.collect { state ->
+                when (state) {
                     PresenceState.PRESENT -> {
                         dimmer.channel(Ch2).turnOn()
                         mirrorChannel.turnOn(3.seconds)
@@ -44,6 +46,26 @@ fun main() {
                 .collect { state ->
                     if (state == SwitchState.ON) bathroomFan.toggle()
                 }
+        }
+
+        val kinconyDimmer = KinconyD16Dimmer(
+            client, "dimmer/d96c4bd0672e64279c34a168/set", this, mapOf(
+                Channel.Ch1 to 17..45,
+                Channel.Ch2 to 10..40,
+                Channel.Ch3 to 20..32,
+                Channel.Ch6 to 21..41,
+            )
+        )
+        val hallwaySensor = PresenceSensor(
+            client, "home/bathroom/binary_sensor/hallway_mmwave/state", this
+        )
+        launch {
+            hallwaySensor.state.collect { state ->
+                when (state) {
+                    PresenceState.PRESENT -> kinconyDimmer.channel(Channel.Ch9).turnOn()
+                    PresenceState.ABSENT, PresenceState.UNKNOWN -> kinconyDimmer.channel(Channel.Ch9).turnOff()
+                }
+            }
         }
     }
 }
