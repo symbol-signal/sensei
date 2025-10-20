@@ -12,6 +12,8 @@ repositories {
     mavenCentral()
 }
 
+val ktorVersion = "3.2.3"  // Should be keep in sync with the version used by the mqtt lib
+
 dependencies {
     implementation("io.github.oshai:kotlin-logging-jvm:7.0.13")
     implementation("ch.qos.logback:logback-classic:1.5.19")
@@ -20,6 +22,8 @@ dependencies {
     implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.9.0")
     implementation("de.kempmobil.ktor.mqtt:mqtt-core:0.7.0")
     implementation("de.kempmobil.ktor.mqtt:mqtt-client:0.7.0")
+    implementation("io.ktor:ktor-client-cio:${ktorVersion}")
+
     testImplementation(kotlin("test"))
 }
 

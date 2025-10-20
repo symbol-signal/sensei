@@ -62,8 +62,8 @@ fun main() {
         launch {
             hallwaySensor.state.collect { state ->
                 when (state) {
-                    PresenceState.PRESENT -> kinconyDimmer.channel(Channel.Ch9).turnOn()
-                    PresenceState.ABSENT, PresenceState.UNKNOWN -> kinconyDimmer.channel(Channel.Ch9).turnOff()
+                    PresenceState.PRESENT -> kinconyDimmer.channel(Channel.Ch6).turnOn()
+                    PresenceState.ABSENT, PresenceState.UNKNOWN -> kinconyDimmer.channel(Channel.Ch6).turnOff()
                 }
             }
         }
