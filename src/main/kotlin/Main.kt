@@ -3,6 +3,8 @@ package symsig.sensei
 import de.kempmobil.ktor.mqtt.Disconnected
 import de.kempmobil.ktor.mqtt.MqttClient
 import io.github.oshai.kotlinlogging.KotlinLogging
+import io.ktor.client.HttpClient
+import io.ktor.client.engine.cio.CIO
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.flow.first
@@ -10,12 +12,22 @@ import symsig.sensei.ShellyPro2PMDimmer.Channel.Ch1
 import symsig.sensei.ShellyPro2PMDimmer.Channel.Ch2
 import symsig.sensei.devices.dimmer.KinconyD16Dimmer
 import symsig.sensei.devices.dimmer.KinconyD16Dimmer.Channel
+import kotlin.time.Duration.Companion.hours
 import kotlin.time.Duration.Companion.seconds
 
 private val log = KotlinLogging.logger {}
 
 fun main() {
     runMqttApplication("central.local", 1883) { client ->
+        val sunTimesService = SunTimesService(HttpClient(CIO))
+        sunTimesService.updateTimes()
+        launch {
+            while (isActive) {
+                delay(3.hours)
+                sunTimesService.updateTimes()
+            }
+        }
+
         val dimmer = ShellyPro2PMDimmer(client, "shellyprodm2pm/rpc", this)
         val bathroomMainSensor = PresenceSensor(
             client, "home/bathroom/binary_sensor/bathroom_mmwave/state", this
@@ -61,9 +73,10 @@ fun main() {
         )
         launch {
             hallwaySensor.state.collect { state ->
+                val hallwayChannel = if (sunTimesService.isNight()) Channel.Ch9 else Channel.Ch6
                 when (state) {
-                    PresenceState.PRESENT -> kinconyDimmer.channel(Channel.Ch6).turnOn()
-                    PresenceState.ABSENT, PresenceState.UNKNOWN -> kinconyDimmer.channel(Channel.Ch6).turnOff()
+                    PresenceState.PRESENT -> kinconyDimmer.channel(hallwayChannel).turnOn()
+                    PresenceState.ABSENT, PresenceState.UNKNOWN -> kinconyDimmer.channel(hallwayChannel).turnOff()
                 }
             }
         }

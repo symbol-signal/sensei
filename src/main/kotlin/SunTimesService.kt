@@ -47,4 +47,10 @@ class SunTimesService(private val client: HttpClient) {
         _sunTimes = SunTimes(parse(parsed.results.sunrise), parse(parsed.results.sunset))
         log.info { "sun_times_updated new_times=[${sunTimes}]" }
     }
+
+    fun isNight(): Boolean {
+        val times = _sunTimes ?: return false
+        val now = OffsetDateTime.now()
+        return now.isAfter(times.sunset) || now.isBefore(times.sunrise)
+    }
 }
