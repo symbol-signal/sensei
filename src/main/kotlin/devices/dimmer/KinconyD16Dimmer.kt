@@ -4,6 +4,7 @@ import de.kempmobil.ktor.mqtt.MqttClient
 import de.kempmobil.ktor.mqtt.PublishRequest
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.serialization.json.Json
+import symsig.sensei.CombinedChannel
 import symsig.sensei.DimmerChannel
 
 private val DEFAULT_RANGE = 0..99
@@ -34,8 +35,8 @@ class KinconyD16Dimmer(
 
         private val json = Json { encodeDefaults = true }
 
-        override suspend fun turnOn() {
-            sendDimmerValue(99)
+        override suspend fun turnOn(brightness: Int?) {
+            sendDimmerValue(brightness ?: 99)
         }
 
         override suspend fun turnOff() {
@@ -53,5 +54,9 @@ class KinconyD16Dimmer(
 
     fun channel(channel: Channel): KinconyD16Channel {
         return KinconyD16Channel(channel)
+    }
+
+    fun channels(vararg channels: Channel): CombinedChannel {
+        return CombinedChannel(channels.map { channel(it) })
     }
 }

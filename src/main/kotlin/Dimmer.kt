@@ -1,15 +1,11 @@
 package symsig.sensei
 
-import de.kempmobil.ktor.mqtt.MqttClient
-import de.kempmobil.ktor.mqtt.PublishRequest
 import kotlinx.coroutines.CoroutineScope
-import kotlinx.serialization.Serializable
-import kotlinx.serialization.json.Json
 import kotlin.time.Duration
 
 interface DimmerChannel {
 
-    suspend fun turnOn()
+    suspend fun turnOn(brightness: Int? = null)
 
     suspend fun turnOff()
 }
@@ -17,11 +13,11 @@ interface DimmerChannel {
 class DelayableChannel(private val channel: DimmerChannel, scope: CoroutineScope) : DimmerChannel {
     private val scheduler = DebounceScheduler(scope)
 
-    override suspend fun turnOn() = turnOn(Duration.ZERO)
+    override suspend fun turnOn(brightness: Int?) = turnOn(Duration.ZERO)
     override suspend fun turnOff() = turnOff(Duration.ZERO)
 
-    fun turnOn(delay: Duration) {
-        scheduler.schedule(delay) { channel.turnOn() }
+    fun turnOn(delay: Duration, brightness: Int? = null) {
+        scheduler.schedule(delay) { channel.turnOn(brightness) }
     }
 
     fun turnOff(delay: Duration) {
@@ -53,8 +49,8 @@ class CombinedChannel(private val channels: List<DimmerChannel>) : DimmerChannel
     /**
      * Turns on all channels sequentially.
      */
-    override suspend fun turnOn() {
-        channels.forEach { it.turnOn() }
+    override suspend fun turnOn(brightness: Int?) {
+        channels.forEach { it.turnOn(brightness) }
     }
 
     /**
@@ -62,51 +58,5 @@ class CombinedChannel(private val channels: List<DimmerChannel>) : DimmerChannel
      */
     override suspend fun turnOff() {
         channels.forEach { it.turnOff() }
-    }
-}
-
-class ShellyPro2PMDimmer(private val mqtt: MqttClient, private val topic: String, scope: CoroutineScope) {
-
-    @Serializable
-    data class LightSetParams(val id: Int, val on: Boolean)
-
-    @Serializable
-    data class ShellyRpc(val src: String = "cli", val method: String, val params: LightSetParams)
-
-    enum class Channel(val id: Int) {
-        Ch1(0), Ch2(1)
-    }
-
-    inner class ShellyPro2PMChannel(val channel: Channel) : DimmerChannel {
-
-        private val json = Json { encodeDefaults = true }
-
-        override suspend fun turnOn() {
-            sendSwitchCmd(true)
-        }
-
-        override suspend fun turnOff() {
-            sendSwitchCmd(false)
-        }
-
-        suspend fun sendSwitchCmd(on: Boolean) {
-            val message = ShellyRpc(method = "Light.Set", params = LightSetParams(channel.id, on))
-            mqtt.publish(PublishRequest(topic) {
-                payload(json.encodeToString(message))
-            })
-        }
-    }
-
-    fun channel(channel: Channel): DimmerChannel {
-        return ShellyPro2PMChannel(channel)
-    }
-
-    /**
-     * Gets a controller that operates on all channels simultaneously.
-     *
-     * @return A [DimmerChannel] that controls all channels together
-     */
-    fun allChannels(): DimmerChannel {
-        return CombinedChannel(Channel.entries.map { channel(it) })
     }
 }
