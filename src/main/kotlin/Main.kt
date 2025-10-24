@@ -13,6 +13,7 @@ import symsig.sensei.devices.dimmer.ShellyPro2PMDimmer.Channel.Ch2
 import symsig.sensei.devices.dimmer.KinconyD16Dimmer
 import symsig.sensei.devices.dimmer.KinconyD16Dimmer.Channel
 import symsig.sensei.devices.dimmer.ShellyPro2PMDimmer
+import java.time.LocalTime
 import kotlin.time.Duration.Companion.hours
 import kotlin.time.Duration.Companion.seconds
 
@@ -36,8 +37,9 @@ fun main() = runBlocking {
             sunTimesService.updateTimes()
         }
     }
+    val dayCycle = DayCycle(sunTimesService, LocalTime.of(22, 0), LocalTime.of(23, 59))
 
-    runMqttApplication("central.local", 1883, runRules(sunTimesService))
+    runMqttApplication("central.local", 1883, runRules(dayCycle))
 //    runMqttApplication("central.local", 1883, runTest(sunTimesService))
     log.info { "application_finished_gracefully" }
 }
@@ -83,13 +85,13 @@ suspend fun runMqttApplication(host: String, port: Int, block: suspend Coroutine
     }
 }
 
-fun runRules(sunTimesService: SunTimesService): suspend CoroutineScope.(MqttClient) -> Unit = { client ->
+fun runRules(dayCycle: DayCycle): suspend CoroutineScope.(MqttClient) -> Unit = { client ->
     val dimmer = ShellyPro2PMDimmer(client, "shellyprodm2pm/rpc", this)
     val bathroomMainSensor = PresenceSensor(
         client, "home/bathroom/binary_sensor/bathroom_mmwave/state", this
     )
     val bathroomShowerSensor = PresenceSensor(
-        client, "home/bathroom/binary_sensor/shower_presence/state", this, absentDelay = 6.seconds
+        client, "home/bathroom/binary_sensor/shower_presence/state", this, absentDelay = 10.seconds
     )
     val bathroomPresence = CombinedPresenceSensor(bathroomMainSensor, bathroomShowerSensor, scope = this)
     launch {
@@ -126,11 +128,11 @@ fun runRules(sunTimesService: SunTimesService): suspend CoroutineScope.(MqttClie
         )
     )
     val hallwaySensor = PresenceSensor(
-        client, "home/bathroom/binary_sensor/hallway_mmwave/state", this
+        client, "home/bathroom/binary_sensor/hallway_mmwave/state", this, absentDelay = 2.seconds
     )
     launch {
         hallwaySensor.state.collect { state ->
-            val hallwayChannel = if (sunTimesService.isNight()) Channel.Ch9 else Channel.Ch6
+            val hallwayChannel = if (dayCycle.isDayTime()) Channel.Ch6 else Channel.Ch9
             when (state) {
                 PresenceState.PRESENT -> kinconyDimmer.channel(hallwayChannel).turnOn()
                 PresenceState.ABSENT, PresenceState.UNKNOWN -> kinconyDimmer.channels(Channel.Ch6, Channel.Ch9).turnOff()
