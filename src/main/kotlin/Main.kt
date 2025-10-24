@@ -8,6 +8,10 @@ import io.ktor.client.engine.cio.CIO
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.flow.first
+import symsig.sensei.TimePeriod.DAYTIME
+import symsig.sensei.TimePeriod.EVENING
+import symsig.sensei.TimePeriod.NIGHTTIME
+import symsig.sensei.TimePeriod.WINDING_DOWN
 import symsig.sensei.devices.dimmer.ShellyPro2PMDimmer.Channel.Ch1
 import symsig.sensei.devices.dimmer.ShellyPro2PMDimmer.Channel.Ch2
 import symsig.sensei.devices.dimmer.KinconyD16Dimmer
@@ -132,9 +136,15 @@ fun runRules(dayCycle: DayCycle): suspend CoroutineScope.(MqttClient) -> Unit = 
     )
     launch {
         hallwaySensor.state.collect { state ->
-            val hallwayChannel = if (dayCycle.isDayTime()) Channel.Ch6 else Channel.Ch9
+            val (channel, brightness) = when (dayCycle.getCurrentPeriod()) {
+                DAYTIME      -> Channel.Ch6 to 100
+                EVENING      -> Channel.Ch9 to 100
+                WINDING_DOWN -> Channel.Ch9 to 50
+                NIGHTTIME    -> Channel.Ch9 to 35
+            }
+
             when (state) {
-                PresenceState.PRESENT -> kinconyDimmer.channel(hallwayChannel).turnOn()
+                PresenceState.PRESENT -> kinconyDimmer.channel(channel).turnOn(brightness)
                 PresenceState.ABSENT, PresenceState.UNKNOWN -> kinconyDimmer.channels(Channel.Ch6, Channel.Ch9).turnOff()
             }
         }
