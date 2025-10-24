@@ -98,16 +98,18 @@ fun runRules(dayCycle: DayCycle): suspend CoroutineScope.(MqttClient) -> Unit = 
         client, "home/bathroom/binary_sensor/shower_presence/state", this, absentDelay = 10.seconds
     )
     val bathroomPresence = CombinedPresenceSensor(bathroomMainSensor, bathroomShowerSensor, scope = this)
+    val delayedMirrorChannel = DelayableChannel(dimmer.channel(Ch1), this, 3.seconds)
+    val allChannels = CombinedChannel(dimmer.channel(Ch2), delayedMirrorChannel)
     launch {
-        val mirrorChannel = DelayableChannel(dimmer.channel(Ch1), this)
-        val allChannels = CombinedChannel(dimmer.channel(Ch2), mirrorChannel)
         bathroomPresence.state.collect { state ->
+            val (channel, brightness) = when (dayCycle.getCurrentPeriod()) {
+                DAYTIME      -> allChannels to 100
+                EVENING      -> allChannels to dayCycle.interpolate(EVENING, 100.0, 20.0).toInt()
+                WINDING_DOWN -> allChannels to 20
+                NIGHTTIME    -> dimmer.channel(Ch2) to 20
+            }
             when (state) {
-                PresenceState.PRESENT -> {
-                    dimmer.channel(Ch2).turnOn()
-                    mirrorChannel.turnOn(3.seconds)
-                }
-
+                PresenceState.PRESENT -> channel.turnOn(brightness)
                 PresenceState.ABSENT, PresenceState.UNKNOWN -> allChannels.turnOff()
             }
         }
@@ -137,7 +139,7 @@ fun runRules(dayCycle: DayCycle): suspend CoroutineScope.(MqttClient) -> Unit = 
     launch {
         hallwaySensor.state.collect { state ->
             val (channel, brightness) = when (dayCycle.getCurrentPeriod()) {
-                DAYTIME      -> Channel.Ch6 to 100
+                DAYTIME      -> Channel.Ch6 to 99
                 EVENING      -> Channel.Ch9 to 100
                 WINDING_DOWN -> Channel.Ch9 to 50
                 NIGHTTIME    -> Channel.Ch9 to 35
@@ -151,5 +153,5 @@ fun runRules(dayCycle: DayCycle): suspend CoroutineScope.(MqttClient) -> Unit = 
     }
 }
 
-fun runTest(sunTimesService: SunTimesService): suspend CoroutineScope.(MqttClient) -> Unit = { client ->
-}
+//fun runTest(sunTimesService: SunTimesService): suspend CoroutineScope.(MqttClient) -> Unit = { client ->
+//}

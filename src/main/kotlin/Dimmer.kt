@@ -10,17 +10,21 @@ interface DimmerChannel {
     suspend fun turnOff()
 }
 
-class DelayableChannel(private val channel: DimmerChannel, scope: CoroutineScope) : DimmerChannel {
+class DelayableChannel(
+    private val channel: DimmerChannel,
+    scope: CoroutineScope,
+    private val defaultDelay: Duration = Duration.ZERO
+) : DimmerChannel {
     private val scheduler = DebounceScheduler(scope)
 
-    override suspend fun turnOn(brightness: Int?) = turnOn(Duration.ZERO)
-    override suspend fun turnOff() = turnOff(Duration.ZERO)
+    override suspend fun turnOn(brightness: Int?) = turnOn(defaultDelay, brightness)
+    override suspend fun turnOff() = turnOff(defaultDelay)
 
-    fun turnOn(delay: Duration, brightness: Int? = null) {
+    fun turnOn(delay: Duration = defaultDelay, brightness: Int? = null) {
         scheduler.schedule(delay) { channel.turnOn(brightness) }
     }
 
-    fun turnOff(delay: Duration) {
+    fun turnOff(delay: Duration = defaultDelay) {
         scheduler.schedule(delay) { channel.turnOff() }
     }
 
