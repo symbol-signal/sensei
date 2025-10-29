@@ -17,6 +17,7 @@ import symsig.sensei.devices.dimmer.ShellyPro2PMDimmer.Channel.Ch2
 import symsig.sensei.devices.dimmer.KinconyD16Dimmer
 import symsig.sensei.devices.dimmer.KinconyD16Dimmer.Channel
 import symsig.sensei.devices.dimmer.ShellyPro2PMDimmer
+import java.nio.channels.UnresolvedAddressException
 import java.time.LocalTime
 import kotlin.time.Duration.Companion.hours
 import kotlin.time.Duration.Companion.seconds
@@ -34,11 +35,14 @@ fun main() = runBlocking {
     })
 
     val sunTimesService = SunTimesService(HttpClient(CIO))
-    sunTimesService.updateTimes()
     launch {
         while (isActive) {
+            try {
+                sunTimesService.updateTimes()
+            } catch (_: UnresolvedAddressException) {
+                log.warn { "cannot_update_sun_times" }
+            }
             delay(3.hours)
-            sunTimesService.updateTimes()
         }
     }
     val dayCycle = DayCycle(sunTimesService, LocalTime.of(22, 0), LocalTime.of(23, 59))
