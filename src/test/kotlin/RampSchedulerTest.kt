@@ -9,7 +9,7 @@ import kotlin.test.assertEquals
 import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 
-class LinearSequenceTimerTest {
+class RampSchedulerTest {
 
     @Test
     fun `should throw exception when start and end times are identical`() {
