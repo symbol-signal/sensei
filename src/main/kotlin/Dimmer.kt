@@ -1,6 +1,7 @@
 package symsig.sensei
 
 import kotlinx.coroutines.CoroutineScope
+import symsig.sensei.util.schedule.DebounceScheduler
 import kotlin.time.Duration
 
 interface DimmerChannel {

@@ -2,6 +2,7 @@ package symsig.sensei
 
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.assertThrows
+import symsig.sensei.util.schedule.RampScheduler
 import java.time.LocalDateTime
 import java.time.LocalTime
 import kotlin.test.assertEquals
@@ -13,7 +14,7 @@ class LinearSequenceTimerTest {
     @Test
     fun `should throw exception when start and end times are identical`() {
         val exception = assertThrows<IllegalArgumentException> {
-            LinearSequenceTimer(
+            RampScheduler(
                 timeBounds = LocalTime.of(10, 0)..LocalTime.of(10, 0),
                 values = 0..100,
                 callback = {}
@@ -24,7 +25,7 @@ class LinearSequenceTimerTest {
 
     @Test
     fun `same-day cycle - before start time should return no update and delay until start`() {
-        val timer = LinearSequenceTimer(
+        val timer = RampScheduler(
             timeBounds = LocalTime.of(10, 0)..LocalTime.of(14, 0),
             values = 0..100,
             callback = {},
@@ -39,7 +40,7 @@ class LinearSequenceTimerTest {
 
     @Test
     fun `same-day cycle - at exact start time should return first value`() {
-        val timer = LinearSequenceTimer(
+        val timer = RampScheduler(
             timeBounds = LocalTime.of(10, 0)..LocalTime.of(14, 0),
             values = 0..100,
             callback = {}
@@ -55,7 +56,7 @@ class LinearSequenceTimerTest {
 
     @Test
     fun `same-day cycle - at exact end time should return last value if not already set`() {
-        val timer = LinearSequenceTimer(
+        val timer = RampScheduler(
             timeBounds = LocalTime.of(10, 0)..LocalTime.of(14, 0),
             values = 0..100,
             callback = {}
@@ -71,7 +72,7 @@ class LinearSequenceTimerTest {
 
     @Test
     fun `same-day cycle - middle of cycle should calculate correct value`() {
-        val timer = LinearSequenceTimer(
+        val timer = RampScheduler(
             timeBounds = LocalTime.of(10, 0)..LocalTime.of(14, 0),
             values = 0..100,
             callback = {}
@@ -87,7 +88,7 @@ class LinearSequenceTimerTest {
 
     @Test
     fun `same-day cycle - decreasing values should work correctly`() {
-        val timer = LinearSequenceTimer(
+        val timer = RampScheduler(
             timeBounds = LocalTime.of(10, 0)..LocalTime.of(14, 0),
             values = 100 downTo 0,
             callback = {}
@@ -103,7 +104,7 @@ class LinearSequenceTimerTest {
 
     @Test
     fun `next-day cycle - during active period should calculate correct value`() {
-        val timer = LinearSequenceTimer(
+        val timer = RampScheduler(
             timeBounds = LocalTime.of(22, 0)..LocalTime.of(2, 0),  // 10 PM to 2 AM
             values = 0..100,
             callback = {}
@@ -119,7 +120,7 @@ class LinearSequenceTimerTest {
 
     @Test
     fun `next-day cycle - outside cycle in afternoon should delay until evening start`() {
-        val timer = LinearSequenceTimer(
+        val timer = RampScheduler(
             timeBounds = LocalTime.of(22, 0)..LocalTime.of(2, 0),
             values = 0..100,
             callback = {},
@@ -134,7 +135,7 @@ class LinearSequenceTimerTest {
 
     @Test
     fun `should handle custom step values correctly`() {
-        val timer = LinearSequenceTimer(
+        val timer = RampScheduler(
             timeBounds = LocalTime.of(10, 0)..LocalTime.of(14, 0),
             values = 0..100 step 10,
             callback = {}
@@ -151,7 +152,7 @@ class LinearSequenceTimerTest {
 
     @Test
     fun `should not return update when value hasn't changed`() {
-        val timer = LinearSequenceTimer(
+        val timer = RampScheduler(
             timeBounds = LocalTime.of(10, 0)..LocalTime.of(14, 0),
             values = 0..100,
             callback = {}
@@ -171,7 +172,7 @@ class LinearSequenceTimerTest {
 
     @Test
     fun `should handle sub-second precision correctly`() {
-        val timer = LinearSequenceTimer(
+        val timer = RampScheduler(
             timeBounds = LocalTime.of(10, 0)..LocalTime.of(10, 1), // 1 min cycle
             values = 0..60,
             callback = {}
@@ -187,7 +188,7 @@ class LinearSequenceTimerTest {
 
     @Test
     fun `next update time should be calculated correctly`() {
-        val timer = LinearSequenceTimer(
+        val timer = RampScheduler(
             timeBounds = LocalTime.of(10, 0)..LocalTime.of(11, 0), // 1 hr cycle
             values = 0..60, // Value changes every minute
             callback = {}
@@ -204,7 +205,7 @@ class LinearSequenceTimerTest {
 
     @Test
     fun `should handle cycle boundary correctly when just after end time`() {
-        val timer = LinearSequenceTimer(
+        val timer = RampScheduler(
             timeBounds = LocalTime.of(10, 0)..LocalTime.of(14, 0),
             values = 0..100,
             callback = {}
@@ -224,7 +225,7 @@ class LinearSequenceTimerTest {
 
     @Test
     fun `should handle cycle boundary correctly when more than 10 seconds after end`() {
-        val timer = LinearSequenceTimer(
+        val timer = RampScheduler(
             timeBounds = LocalTime.of(10, 0)..LocalTime.of(14, 0),
             values = 0..100,
             callback = {}

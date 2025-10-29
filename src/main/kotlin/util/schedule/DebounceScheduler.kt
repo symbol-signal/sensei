@@ -1,4 +1,4 @@
-package symsig.sensei
+package symsig.sensei.util.schedule
 
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
