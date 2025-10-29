@@ -140,7 +140,7 @@ fun runRules(dayCycle: DayCycle): suspend CoroutineScope.(MqttClient) -> Unit = 
         hallwaySensor.state.collect { state ->
             val (channel, brightness) = when (dayCycle.getCurrentPeriod()) {
                 DAYTIME      -> Channel.Ch6 to 99
-                EVENING      -> Channel.Ch9 to 100
+                EVENING      -> Channel.Ch9 to 99
                 WINDING_DOWN -> Channel.Ch9 to 50
                 NIGHTTIME    -> Channel.Ch9 to 35
             }
