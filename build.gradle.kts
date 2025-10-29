@@ -1,7 +1,7 @@
 plugins {
     kotlin("jvm") version "2.2.10"
     application
-    kotlin("plugin.serialization") version "1.9.20"
+    kotlin("plugin.serialization") version "2.2.10"
     id("com.github.johnrengelman.shadow") version "8.1.1"
 }
 
@@ -12,7 +12,7 @@ repositories {
     mavenCentral()
 }
 
-val ktorVersion = "3.2.3"  // Should be keep in sync with the version used by the mqtt lib
+val ktorVersion = "3.2.3"  // Should be kept in sync with the version used by the mqtt lib
 
 dependencies {
     implementation("io.github.oshai:kotlin-logging-jvm:7.0.13")
@@ -25,6 +25,7 @@ dependencies {
     implementation("io.ktor:ktor-client-cio:${ktorVersion}")
 
     testImplementation(kotlin("test"))
+    implementation(kotlin("stdlib-jdk8"))
 }
 
 application {
