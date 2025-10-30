@@ -108,9 +108,9 @@ fun runRules(dayCycle: DayCycle): suspend CoroutineScope.(MqttClient) -> Unit = 
         bathroomPresence.state.collect { state ->
             val (channel, brightness) = when (dayCycle.getCurrentPeriod()) {
                 DAYTIME      -> allChannels to 100
-                EVENING      -> allChannels to dayCycle.interpolate(EVENING, 100.0, 20.0).toInt()
+                EVENING      -> allChannels to dayCycle.interpolate(EVENING, 80.0, 20.0).toInt()
                 WINDING_DOWN -> allChannels to 20
-                NIGHTTIME    -> dimmer.channel(Ch2) to 20
+                NIGHTTIME    -> dimmer.channel(Ch1) to 10
             }
             when (state) {
                 PresenceState.PRESENT -> channel.turnOn(brightness)
