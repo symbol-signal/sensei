@@ -43,6 +43,10 @@ class KinconyD16Dimmer(
             sendDimmerValue(0)
         }
 
+        override suspend fun toggle() {
+            TODO("Not yet implemented")
+        }
+
         suspend fun sendDimmerValue(value: Int) {
             require(value in 0..99) { "Dimmer value must be between 0 and 99, got: $value" }
             val effectiveVal = mapToRange(value, effectiveRanges[channel] ?: DEFAULT_RANGE)

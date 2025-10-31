@@ -103,8 +103,8 @@ fun runRules(dayCycle: DayCycle): suspend CoroutineScope.(MqttClient) -> Unit = 
     )
     val bathroomPresence = CombinedPresenceSensor(bathroomMainSensor, bathroomShowerSensor, scope = this)
     val delayedMirrorChannel = DelayableChannel(dimmer.channel(Ch1), this, 3.seconds)
-    val allChannels = CombinedChannel(dimmer.channel(Ch2), delayedMirrorChannel)
     launch {
+        val allChannels = CombinedChannel(dimmer.channel(Ch2), delayedMirrorChannel)
         bathroomPresence.state.collect { state ->
             val (channel, brightness) = when (dayCycle.getCurrentPeriod()) {
                 DAYTIME      -> allChannels to 100
@@ -119,10 +119,26 @@ fun runRules(dayCycle: DayCycle): suspend CoroutineScope.(MqttClient) -> Unit = 
         }
     }
 
-    val bathroomFan = ShellyPlus1PMRelay(client, "shellyplus1pm-fan/rpc", this)
-    val bathroomSwitch = Switch(client, "home/bathroom/switch/2/state", this)
+    val bathroomLightSwitch = Switch(client, "home/bathroom/switch/1/state", this)
     launch {
-        bathroomSwitch.state
+        bathroomLightSwitch.state
+            .drop(1)
+            .collect { state ->
+                if (state == SwitchState.ON) {
+                    if (dayCycle.isNightTime()) {
+                        dimmer.channel(Ch1).toggle()
+                    } else {
+                        dimmer.channel(Ch1).toggle()
+                        dimmer.channel(Ch2).toggle()
+                    }
+                }
+            }
+    }
+
+    val bathroomFan = ShellyPlus1PMRelay(client, "shellyplus1pm-fan/rpc", this)
+    val bathroomFanSwitch = Switch(client, "home/bathroom/switch/2/state", this)
+    launch {
+        bathroomFanSwitch.state
             .drop(1)
             .collect { state ->
                 if (state == SwitchState.ON) bathroomFan.toggle()
