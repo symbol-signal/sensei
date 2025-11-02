@@ -3,20 +3,44 @@ package symsig.sensei.devices.dimmer
 import de.kempmobil.ktor.mqtt.MqttClient
 import de.kempmobil.ktor.mqtt.PublishRequest
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.filter
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.stateIn
+import kotlinx.io.bytestring.ByteString
+import kotlinx.io.bytestring.decodeToString
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.int
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
 import symsig.sensei.CombinedChannel
 import symsig.sensei.DimmerChannel
+import java.util.concurrent.ConcurrentHashMap
 
 private val DEFAULT_RANGE = 0..99
 
 
 class KinconyD16Dimmer(
     private val mqtt: MqttClient,
-    private val topic: String,
-    scope: CoroutineScope,
-    effectiveRanges: Map<Channel, IntRange> = mapOf()) {
+    private val stateTopic: String,
+    private val setTopic: String,
+    private val scope: CoroutineScope,
+    effectiveRanges: Map<Channel, IntRange> = mapOf()
+) {
+
+    val state: StateFlow<Map<Channel, Int>> =
+        mqtt.publishedPackets
+            .filter { it.topic.name == stateTopic }
+            .map { parseDimmerStates(it.payload) }
+            .stateIn(scope, SharingStarted.WhileSubscribed(), Channel.entries.associateWith { 0 })
+
+    private val channelInstances = ConcurrentHashMap<Channel, KinconyD16Channel>()
 
     private val effectiveRanges: Map<Channel, IntRange> = effectiveRanges.toMap()
+
+    private val json = Json
 
     enum class Channel(val id: Int) {
         Ch1(1), Ch2(2), Ch3(3), Ch4(4), Ch5(5), Ch6(6), Ch7(7), Ch8(8),
@@ -31,7 +55,28 @@ class KinconyD16Dimmer(
         return ((rangeLength / 99.0) * value + range.first).toInt()
     }
 
-    inner class KinconyD16Channel(val channel: Channel) : DimmerChannel {
+    private fun parseDimmerStates(jsonString: ByteString): Map<Channel, Int> {
+        val dimmerStateJson = json.parseToJsonElement(jsonString.decodeToString()).jsonObject
+        return Channel.entries.associateWith { channel ->
+            dimmerStateJson["dimmer${channel.id}"]?.jsonObject?.get("value")?.jsonPrimitive?.int ?: 0
+        }
+    }
+
+    fun channel(channel: Channel): KinconyD16Channel {
+        return channelInstances.computeIfAbsent(channel) { ch ->
+            val brightness = state
+                .map { it[ch] ?: 0 }
+                .distinctUntilChanged()
+                .stateIn(scope, SharingStarted.WhileSubscribed(5000), state.value[ch] ?: 0)
+            KinconyD16Channel(ch, brightness)
+        }
+    }
+
+    fun channels(vararg channels: Channel): CombinedChannel {
+        return CombinedChannel(channels.map { channel(it) })
+    }
+
+    inner class KinconyD16Channel(val channel: Channel, val brightness: StateFlow<Int>) : DimmerChannel {
 
         private val json = Json { encodeDefaults = true }
 
@@ -50,17 +95,9 @@ class KinconyD16Dimmer(
         suspend fun sendDimmerValue(value: Int) {
             require(value in 0..99) { "Dimmer value must be between 0 and 99, got: $value" }
             val effectiveVal = mapToRange(value, effectiveRanges[channel] ?: DEFAULT_RANGE)
-            mqtt.publish(PublishRequest(topic) {
+            mqtt.publish(PublishRequest(setTopic) {
                 payload(json.encodeToString(mapOf("dimmer${channel.id}" to mapOf("value" to effectiveVal))))
             })
         }
-    }
-
-    fun channel(channel: Channel): KinconyD16Channel {
-        return KinconyD16Channel(channel)
-    }
-
-    fun channels(vararg channels: Channel): CombinedChannel {
-        return CombinedChannel(channels.map { channel(it) })
     }
 }

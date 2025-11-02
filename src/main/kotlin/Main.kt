@@ -146,7 +146,11 @@ fun runRules(dayCycle: DayCycle): suspend CoroutineScope.(MqttClient) -> Unit = 
     }
 
     val kinconyDimmer = KinconyD16Dimmer(
-        client, "dimmer/d96c4bd0672e64279c34a168/set", this, mapOf(
+        client,
+        "dimmer/d96c4bd0672e64279c34a168/state",
+        "dimmer/d96c4bd0672e64279c34a168/set",
+        this,
+        mapOf(
             Channel.Ch1 to 17..45,
             Channel.Ch2 to 10..40,
             Channel.Ch3 to 20..32,
