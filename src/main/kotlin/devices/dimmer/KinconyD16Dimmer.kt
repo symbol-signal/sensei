@@ -18,6 +18,7 @@ import kotlinx.serialization.json.jsonPrimitive
 import symsig.sensei.CombinedChannel
 import symsig.sensei.DimmerChannel
 import java.util.concurrent.ConcurrentHashMap
+import kotlin.math.roundToInt
 
 private val DEFAULT_RANGE = 0..99
 
@@ -55,10 +56,17 @@ class KinconyD16Dimmer(
         return ((rangeLength / 99.0) * value + range.first).toInt()
     }
 
+    private fun mapFromRange(value: Int, range: IntRange): Int {
+        if (value <= range.first) return 0
+        val rangeLength = range.last - range.first
+        return (((value - range.first) / rangeLength.toDouble()) * 99).roundToInt().coerceIn(0, 99)
+    }
+
     private fun parseDimmerStates(jsonString: ByteString): Map<Channel, Int> {
         val dimmerStateJson = json.parseToJsonElement(jsonString.decodeToString()).jsonObject
         return Channel.entries.associateWith { channel ->
-            dimmerStateJson["dimmer${channel.id}"]?.jsonObject?.get("value")?.jsonPrimitive?.int ?: 0
+            val hwValue = dimmerStateJson["dimmer${channel.id}"]?.jsonObject?.get("value")?.jsonPrimitive?.int ?: 0
+            mapFromRange(hwValue, effectiveRanges[channel] ?: DEFAULT_RANGE)  // Map back to logical 0-99 range
         }
     }
 
