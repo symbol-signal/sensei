@@ -53,7 +53,7 @@ class KinconyD16Dimmer(
             return 0  // Use 0 for turning off
         }
         val rangeLength = range.last - range.first
-        return ((rangeLength / 99.0) * value + range.first).toInt()
+        return ((rangeLength / 99.0) * value + range.first).roundToInt()
     }
 
     private fun mapFromRange(value: Int, range: IntRange): Int {
@@ -86,10 +86,12 @@ class KinconyD16Dimmer(
 
     inner class KinconyD16Channel(val channel: Channel, val brightness: StateFlow<Int>) : DimmerChannel {
 
+        val lastSetBrightness: StateFlow<Int> = brightness.filter { it > 0 }.stateIn(scope, SharingStarted.Eagerly, 99)
+
         private val json = Json { encodeDefaults = true }
 
         override suspend fun turnOn(brightness: Int?) {
-            sendDimmerValue(brightness ?: 99)
+            sendDimmerValue(brightness ?: lastSetBrightness.value)
         }
 
         override suspend fun turnOff() {
@@ -97,7 +99,11 @@ class KinconyD16Dimmer(
         }
 
         override suspend fun toggle() {
-            TODO("Not yet implemented")
+            if (brightness.value == 0) {
+                turnOn()
+            } else {
+                turnOff()
+            }
         }
 
         suspend fun sendDimmerValue(value: Int) {
