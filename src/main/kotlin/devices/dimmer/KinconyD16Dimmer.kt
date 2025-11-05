@@ -3,11 +3,14 @@ package symsig.sensei.devices.dimmer
 import de.kempmobil.ktor.mqtt.MqttClient
 import de.kempmobil.ktor.mqtt.PublishRequest
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.filter
+import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.io.bytestring.ByteString
 import kotlinx.io.bytestring.decodeToString
@@ -22,6 +25,10 @@ import kotlin.math.roundToInt
 
 private val DEFAULT_RANGE = 0..99
 
+
+private fun checkDimmerValue(value: Int) {
+    require(value in 0..99) { "Dimmer value must be between 0 and 99, got: $value" }
+}
 
 class KinconyD16Dimmer(
     private val mqtt: MqttClient,
@@ -86,9 +93,22 @@ class KinconyD16Dimmer(
 
     inner class KinconyD16Channel(val channel: Channel, val brightness: StateFlow<Int>) : DimmerChannel {
 
-        val lastSetBrightness: StateFlow<Int> = brightness.filter { it > 0 }.stateIn(scope, SharingStarted.Eagerly, 99)
+        val isOn: StateFlow<Boolean> = brightness
+            .map { it > 0 }
+            .distinctUntilChanged()
+            .stateIn(scope, SharingStarted.WhileSubscribed(5000), brightness.value > 0)
+
+        private val _lastSetBrightness = MutableStateFlow(99)
+        val lastSetBrightness: StateFlow<Int> get() = _lastSetBrightness
 
         private val json = Json { encodeDefaults = true }
+
+        init {
+            brightness
+                .filter { it > 0 }
+                .onEach { _lastSetBrightness.value = it }
+                .launchIn(scope)
+        }
 
         override suspend fun turnOn(brightness: Int?) {
             sendDimmerValue(brightness ?: lastSetBrightness.value)
@@ -99,15 +119,24 @@ class KinconyD16Dimmer(
         }
 
         override suspend fun toggle() {
-            if (brightness.value == 0) {
-                turnOn()
-            } else {
+            if (isOn.value) {
                 turnOff()
+            } else {
+                turnOn()
             }
         }
 
-        suspend fun sendDimmerValue(value: Int) {
-            require(value in 0..99) { "Dimmer value must be between 0 and 99, got: $value" }
+        suspend fun setBrightness(value: Int) {
+            checkDimmerValue(value)
+            if (isOn.value) {
+                sendDimmerValue(value)
+            } else {
+                _lastSetBrightness.value = value
+            }
+        }
+
+        private suspend fun sendDimmerValue(value: Int) {
+            checkDimmerValue(value)
             val effectiveVal = mapToRange(value, effectiveRanges[channel] ?: DEFAULT_RANGE)
             mqtt.publish(PublishRequest(setTopic) {
                 payload(json.encodeToString(mapOf("dimmer${channel.id}" to mapOf("value" to effectiveVal))))
