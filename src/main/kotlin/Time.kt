@@ -87,10 +87,6 @@ class DayCycle(val sunTimesService: SunTimesService, val bedTime: LocalTime, val
         }
     }
 
-    fun interpolate(timePeriod: TimePeriod, startValue: Double, endValue: Double): Double {
-        return getTimeRange(timePeriod).interpolate(startValue, endValue)
-    }
-
     fun isDayTime() = LocalTime.now() in daytime
     fun isEvening() = LocalTime.now() in evening
     fun isWindingDown() = LocalTime.now() in windingDown
