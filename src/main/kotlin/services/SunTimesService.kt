@@ -7,6 +7,7 @@ import io.ktor.client.statement.bodyAsText
 import kotlinx.coroutines.delay
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
+import symsig.sensei.DateTimeRange
 import java.io.IOException
 import java.lang.Exception
 import java.time.Duration
@@ -16,7 +17,10 @@ import java.time.ZoneId
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.ConcurrentMap
 
-data class SunTimes(val date: LocalDate, val sunrise: LocalDateTime, val sunset: LocalDateTime)
+data class SunTimes(val date: LocalDate, val sunrise: LocalDateTime, val sunset: LocalDateTime) {
+
+    val range = DateTimeRange(sunrise, sunset)
+}
 
 class SunTimesFetchException(message: String, cause: Throwable? = null) : IOException(message, cause)
 

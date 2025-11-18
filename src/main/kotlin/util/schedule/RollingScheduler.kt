@@ -1,9 +1,12 @@
 package symsig.sensei.util.schedule
 
+import io.github.oshai.kotlinlogging.KotlinLogging
 import kotlinx.coroutines.delay
 import java.time.Clock
 import java.time.Duration
 import java.time.LocalDateTime
+
+private val log = KotlinLogging.logger {}
 
 typealias ScheduleProvider<V> = suspend () -> Collection<Pair<LocalDateTime, V>>
 
@@ -16,6 +19,11 @@ class RollingScheduler<V>(
     suspend fun run() {
         while (true) {
             val sortedSchedule = scheduleProvider().sortedBy { it.first }
+            if (sortedSchedule.isEmpty()) {
+                log.debug { "empty_schedule_returned action=[wait_and_retry]" }
+                delay(10_000)
+                continue
+            }
             val (past, future) = sortedSchedule.partition { it.first <= LocalDateTime.now(clock) }
             val trimmedSchedule = listOfNotNull(past.lastOrNull()) + future
             runForSchedule(trimmedSchedule)
