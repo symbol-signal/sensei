@@ -7,7 +7,7 @@ import io.ktor.client.statement.bodyAsText
 import kotlinx.coroutines.delay
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
-import symsig.sensei.DateTimeRange
+import symsig.sensei.TimeRange
 import java.io.IOException
 import java.lang.Exception
 import java.time.Duration
@@ -19,7 +19,7 @@ import java.util.concurrent.ConcurrentMap
 
 data class SunTimes(val date: LocalDate, val sunrise: LocalDateTime, val sunset: LocalDateTime) {
 
-    val range = DateTimeRange(sunrise, sunset)
+    val range = TimeRange(sunrise.toLocalTime(), sunset.toLocalTime())
 }
 
 class SunTimesFetchException(message: String, cause: Throwable? = null) : IOException(message, cause)
@@ -32,11 +32,40 @@ class SunTimesService(private val client: HttpClient) {
 
     private val cachedTimes: ConcurrentMap<LocalDate, SunTimes> = ConcurrentHashMap()
 
+    private fun getTimesForDate(date: LocalDate): SunTimes {
+        return cachedTimes[date] ?: getDefaultTimes(date)
+    }
+
     val today: SunTimes
-        get() = cachedTimes[LocalDate.now()] ?: getDefaultTimes(LocalDate.now())
+        get() = getTimesForDate(LocalDate.now())
 
     val tomorrow: SunTimes
-        get() = cachedTimes[LocalDate.now().plusDays(1)] ?: getDefaultTimes(LocalDate.now().plusDays(1))
+        get() = getTimesForDate(LocalDate.now().plusDays(1))
+
+    /**
+     * Returns the currently relevant sun times.
+     * - If we're before today's sunset: returns today's times
+     * - If we're after today's sunset: returns tomorrow's times
+     *
+     * This ensures you always get the "active" or upcoming sun cycle.
+     */
+    val current: SunTimes
+        get() {
+            val now = LocalDateTime.now()
+            val today = LocalDate.now()
+            val todayTimes = getTimesForDate(today)
+            return if (now.isBefore(todayTimes.sunset)) {
+                todayTimes
+            } else {
+                getTimesForDate(today.plusDays(1))
+            }
+        }
+
+    fun dayTime(): TimeRange = current.range
+
+    fun fromSunsetFor(duration: kotlin.time.Duration) {
+        val now = LocalDateTime.now()
+    }
 
     private fun getDefaultTimes(day: LocalDate): SunTimes {
         return SunTimes(day, day.atTime(6, 30), day.atTime(19, 30))
@@ -80,7 +109,8 @@ class SunTimesService(private val client: HttpClient) {
                 update()
             } catch (e: Exception) {
                 consecutiveFailures++
-                val retryDelay = minOf(5 * 60 * 1000L * consecutiveFailures, 60 * 60 * 1000L) // 5 min * failures, max 1 hour
+                val retryDelay =
+                    minOf(5 * 60 * 1000L * consecutiveFailures, 60 * 60 * 1000L) // 5 min * failures, max 1 hour
                 log.warn { "sun_times_update_failed error=[${e.message}] retry_in_ms=[$retryDelay]" }
                 delay(retryDelay)
                 continue

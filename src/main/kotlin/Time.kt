@@ -22,6 +22,14 @@ data class TimeRange(val start: LocalTime, val end: LocalTime) {
         }
     }
 
+    fun isBefore(time: LocalTime): Boolean {
+        return if (start <= end) {
+            time < start
+        } else {
+            time in end..<start  // Midnight-crossing: before = inside (end to start)
+        }
+    }
+
     fun durationInMinutes() = durationInMinutes(start, end)
 
     fun interpolate(startValue: Double, endValue: Double): Double =
@@ -37,6 +45,21 @@ data class TimeRange(val start: LocalTime, val end: LocalTime) {
         val progress = elapsedMinutes.toDouble() / totalMinutes
         return startValue + (endValue - startValue) * progress
     }
+
+    fun resolveFor(ts: LocalDateTime): DateTimeRange {
+        val time = ts.toLocalTime()
+        val date = if (isBefore(time) || time in this) {
+            ts.toLocalDate()
+        } else {
+            ts.toLocalDate().plusDays(1)
+        }
+
+        val startDT = LocalDateTime.of(date, start)
+        val endDT = if (start <= end) LocalDateTime.of(date, end) else LocalDateTime.of(date.plusDays(1), end)
+        return DateTimeRange(startDT, endDT)
+    }
+
+    fun forNow() = resolveFor(LocalDateTime.now())
 }
 
 data class DateTimeRange(val start: LocalDateTime, val end: LocalDateTime) {
