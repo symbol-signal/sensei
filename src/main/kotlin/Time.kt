@@ -1,6 +1,6 @@
 package symsig.sensei
 
-import symsig.sensei.services.SunTimesService
+import symsig.sensei.services.SolarService
 import java.time.Duration
 import java.time.LocalDateTime
 import java.time.LocalTime
@@ -83,8 +83,8 @@ enum class TimePeriod {
     NIGHTTIME     // sleep time to sunrise
 }
 
-class DayCycle(val sunTimesService: SunTimesService, val bedTime: LocalTime, val sleepTime: LocalTime) {
-    private val todaySunTimes get() = sunTimesService.today
+class DayCycle(val solarService: SolarService, val bedTime: LocalTime, val sleepTime: LocalTime) {
+    private val todaySunTimes get() = solarService.today
 
     val daytime get() = TimeRange(todaySunTimes.sunrise.toLocalTime(), todaySunTimes.sunset.toLocalTime())
     val evening get() = TimeRange(todaySunTimes.sunset.toLocalTime(), bedTime)

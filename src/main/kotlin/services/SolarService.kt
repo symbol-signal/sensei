@@ -7,6 +7,7 @@ import io.ktor.client.statement.bodyAsText
 import kotlinx.coroutines.delay
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
+import symsig.sensei.DateTimeRange
 import symsig.sensei.TimeRange
 import java.io.IOException
 import java.lang.Exception
@@ -17,30 +18,30 @@ import java.time.ZoneId
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.ConcurrentMap
 
-data class SunTimes(val date: LocalDate, val sunrise: LocalDateTime, val sunset: LocalDateTime) {
+data class SolarDay(val date: LocalDate, val sunrise: LocalDateTime, val sunset: LocalDateTime) {
 
-    val range = TimeRange(sunrise.toLocalTime(), sunset.toLocalTime())
+    val range = DateTimeRange(sunrise, sunset)
 }
 
-class SunTimesFetchException(message: String, cause: Throwable? = null) : IOException(message, cause)
+class SolarDayFetchException(message: String, cause: Throwable? = null) : IOException(message, cause)
 
-class SunTimesService(private val client: HttpClient) {
+class SolarService(private val client: HttpClient) {
 
     private val log = KotlinLogging.logger {}
 
     private val json = Json { ignoreUnknownKeys = true }
 
-    private val cachedTimes: ConcurrentMap<LocalDate, SunTimes> = ConcurrentHashMap()
+    private val cachedDays: ConcurrentMap<LocalDate, SolarDay> = ConcurrentHashMap()
 
-    private fun getTimesForDate(date: LocalDate): SunTimes {
-        return cachedTimes[date] ?: getDefaultTimes(date)
+    private fun dayFor(date: LocalDate): SolarDay {
+        return cachedDays[date] ?: getDefaultTimes(date)
     }
 
-    val today: SunTimes
-        get() = getTimesForDate(LocalDate.now())
+    val today: SolarDay
+        get() = dayFor(LocalDate.now())
 
-    val tomorrow: SunTimes
-        get() = getTimesForDate(LocalDate.now().plusDays(1))
+    val tomorrow: SolarDay
+        get() = dayFor(LocalDate.now().plusDays(1))
 
     /**
      * Returns the currently relevant sun times.
@@ -49,37 +50,48 @@ class SunTimesService(private val client: HttpClient) {
      *
      * This ensures you always get the "active" or upcoming sun cycle.
      */
-    val current: SunTimes
+    val current: SolarDay
         get() {
             val now = LocalDateTime.now()
             val today = LocalDate.now()
-            val todayTimes = getTimesForDate(today)
+            val todayTimes = dayFor(today)
             return if (now.isBefore(todayTimes.sunset)) {
                 todayTimes
             } else {
-                getTimesForDate(today.plusDays(1))
+                dayFor(today.plusDays(1))
             }
         }
 
-    fun dayTime(): TimeRange = current.range
-
-    fun fromSunsetFor(duration: kotlin.time.Duration) {
+    fun fromSunsetFor(duration: kotlin.time.Duration): TimeRange {
         val now = LocalDateTime.now()
+        val today = now.toLocalDate()
+        val todaySunset = dayFor(today).sunset
+
+        val sunset = if (now.isAfter(todaySunset.plusNanos(duration.inWholeNanoseconds))) {
+            dayFor(today.plusDays(1)).sunset
+        } else {
+            todaySunset
+        }
+
+        return TimeRange(
+            sunset.toLocalTime(),
+            sunset.toLocalTime().plusNanos(duration.inWholeNanoseconds)
+        )
     }
 
-    private fun getDefaultTimes(day: LocalDate): SunTimes {
-        return SunTimes(day, day.atTime(6, 30), day.atTime(19, 30))
+    private fun getDefaultTimes(day: LocalDate): SolarDay {
+        return SolarDay(day, day.atTime(6, 30), day.atTime(19, 30))
     }
 
-    suspend fun fetchTimes(day: LocalDate): SunTimes {
+    suspend fun fetchTimes(day: LocalDate): SolarDay {
         val zone = ZoneId.systemDefault().id
         val resp =
             client.get("https://api.sunrise-sunset.org/json?lat=49.854&lng=18.54169&formatted=0&tzid=$zone&date=${day}")
         if (resp.status.value != 200) {
-            throw SunTimesFetchException("Failed to fetch sun times: HTTP ${resp.status.value}")
+            throw SolarDayFetchException("Failed to fetch sun times: HTTP ${resp.status.value}")
         }
         val respObj = json.decodeFromString<SunriseSunsetResponse>(resp.bodyAsText())
-        return SunTimes(
+        return SolarDay(
             date = day,
             sunrise = LocalDateTime.parse(respObj.results.sunrise),
             sunset = LocalDateTime.parse(respObj.results.sunset)
@@ -87,7 +99,7 @@ class SunTimesService(private val client: HttpClient) {
     }
 
     private suspend fun fetchAndCache(day: LocalDate) {
-        cachedTimes[day] = fetchTimes(day)
+        cachedDays[day] = fetchTimes(day)
     }
 
     suspend fun update() {
@@ -127,7 +139,7 @@ class SunTimesService(private val client: HttpClient) {
     private fun cleanupCache(today: LocalDate) {
         val maxDate = today.plusDays(30)
 
-        cachedTimes.keys.removeIf { date ->
+        cachedDays.keys.removeIf { date ->
             date.isBefore(today) || date.isAfter(maxDate)
         }
     }

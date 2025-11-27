@@ -17,7 +17,7 @@ import symsig.sensei.devices.dimmer.ShellyPro2PMDimmer.Channel.Ch2
 import symsig.sensei.devices.dimmer.KinconyD16Dimmer
 import symsig.sensei.devices.dimmer.KinconyD16Dimmer.Channel
 import symsig.sensei.devices.dimmer.ShellyPro2PMDimmer
-import symsig.sensei.services.SunTimesService
+import symsig.sensei.services.SolarService
 import java.time.LocalTime
 import kotlin.time.Duration.Companion.seconds
 
@@ -33,11 +33,11 @@ fun main() = runBlocking {
         }
     })
 
-    val sunTimesService = SunTimesService(HttpClient(CIO))
+    val solarService = SolarService(HttpClient(CIO))
     launch {
-        sunTimesService.runUpdate()
+        solarService.runUpdate()
     }
-    val dayCycle = DayCycle(sunTimesService, LocalTime.of(22, 0), LocalTime.of(23, 59))
+    val dayCycle = DayCycle(solarService, LocalTime.of(22, 0), LocalTime.of(23, 59))
 
     runMqttApplication("central.local", 1883, runRules(dayCycle))
 //    runMqttApplication("central.local", 1883, runTest(sunTimesService))
