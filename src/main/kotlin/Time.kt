@@ -1,69 +1,16 @@
 package symsig.sensei
 
-import symsig.sensei.services.SolarService
 import java.time.Duration
+import java.time.LocalDate
 import java.time.LocalDateTime
 import java.time.LocalTime
-import java.time.temporal.ChronoUnit
 import java.time.temporal.ChronoUnit.MILLIS
-
-fun durationInMinutes(start: LocalTime, end: LocalTime): Int {
-    val minutes = ChronoUnit.MINUTES.between(start, end)
-    return (if (minutes >= 0) minutes else minutes + 24 * 60).toInt()
-}
-
-data class TimeRange(val start: LocalTime, val end: LocalTime) {
-
-    operator fun contains(time: LocalTime): Boolean {
-        return if (start <= end) {
-            time in start..<end  // Normal case: start=14:00, end=18:00
-        } else {
-            time !in end..<start  // Crosses midnight: start=23:00, end=02:00
-        }
-    }
-
-    fun isBefore(time: LocalTime): Boolean {
-        return if (start <= end) {
-            time < start
-        } else {
-            time in end..<start  // Midnight-crossing: before = inside (end to start)
-        }
-    }
-
-    fun durationInMinutes() = durationInMinutes(start, end)
-
-    fun interpolate(startValue: Double, endValue: Double): Double =
-        interpolate(startValue, endValue, LocalTime.now())
-
-    fun interpolate(startValue: Double, endValue: Double, current: LocalTime): Double {
-        if (current !in this) {
-            // Outside range - return start or end value based on which is closer
-            return if (durationInMinutes(current, start) < durationInMinutes(end, current)) startValue else endValue
-        }
-        val totalMinutes = durationInMinutes()
-        val elapsedMinutes = durationInMinutes(start, current)
-        val progress = elapsedMinutes.toDouble() / totalMinutes
-        return startValue + (endValue - startValue) * progress
-    }
-
-    fun resolveFor(ts: LocalDateTime): DateTimeRange {
-        val time = ts.toLocalTime()
-        val date = if (isBefore(time) || time in this) {
-            ts.toLocalDate()
-        } else {
-            ts.toLocalDate().plusDays(1)
-        }
-
-        val startDT = LocalDateTime.of(date, start)
-        val endDT = if (start <= end) LocalDateTime.of(date, end) else LocalDateTime.of(date.plusDays(1), end)
-        return DateTimeRange(startDT, endDT)
-    }
-
-    fun forNow() = resolveFor(LocalDateTime.now())
-}
+import kotlin.time.toJavaDuration
 
 data class DateTimeRange(val start: LocalDateTime, val end: LocalDateTime) {
     val duration: Duration = Duration.between(start, end)
+
+    operator fun contains(dateTime: LocalDateTime): Boolean = dateTime in start..<end
 
     fun <V> withProgression(values: Iterable<V>): List<Pair<LocalDateTime, V>> {
         val valueList = values.toList()
@@ -74,44 +21,135 @@ data class DateTimeRange(val start: LocalDateTime, val end: LocalDateTime) {
         val stepIntervalMs = duration.toMillis() / (valueList.size - 1)
         return valueList.mapIndexed { index, value -> start.plus(stepIntervalMs * index, MILLIS) to value }
     }
+
+    /**
+     * Interpolate a value based on position within this range.
+     * Returns startValue at range start, endValue at range end, linearly interpolated between.
+     * If dateTime is outside the range, returns the nearest boundary value.
+     */
+    fun interpolate(dateTime: LocalDateTime, startValue: Double, endValue: Double): Double {
+        if (dateTime <= start) return startValue
+        if (dateTime >= end) return endValue
+
+        val elapsed = Duration.between(start, dateTime).toMillis()
+        val progress = elapsed.toDouble() / duration.toMillis()
+        return startValue + (endValue - startValue) * progress
+    }
 }
 
-enum class TimePeriod {
-    DAYTIME,      // sunrise to sunset
-    EVENING,      // sunset to bedtime
-    WINDING_DOWN, // bedtime to sleep time
-    NIGHTTIME     // sleep time to sunrise
+/**
+ * A token representing a point in time that can be resolved for any date.
+ */
+interface TimeToken {
+    fun forDate(date: LocalDate): LocalDateTime
+
+    operator fun plus(d: kotlin.time.Duration): TimeToken = OffsetToken(this, d)
+    operator fun minus(d: kotlin.time.Duration): TimeToken = OffsetToken(this, -d)
 }
 
-class DayCycle(val solarService: SolarService, val bedTime: LocalTime, val sleepTime: LocalTime) {
-    private val todaySunTimes get() = solarService.today
+/**
+ * A fixed time of day (e.g., 2:00 AM).
+ */
+class FixedTimeToken(private val time: LocalTime) : TimeToken {
+    override fun forDate(date: LocalDate): LocalDateTime = date.atTime(time)
+}
 
-    val daytime get() = TimeRange(todaySunTimes.sunrise.toLocalTime(), todaySunTimes.sunset.toLocalTime())
-    val evening get() = TimeRange(todaySunTimes.sunset.toLocalTime(), bedTime)
-    val windingDown get() = TimeRange(bedTime, sleepTime)
-    val nighttime get() = TimeRange(sleepTime, todaySunTimes.sunrise.toLocalTime())
+/**
+ * A token with an offset applied (e.g., SUNSET + 1.hour).
+ */
+class OffsetToken(private val base: TimeToken, private val offset: kotlin.time.Duration) : TimeToken {
+    override fun forDate(date: LocalDate): LocalDateTime =
+        base.forDate(date).plus(offset.toJavaDuration())
 
-    fun getCurrentPeriod(): TimePeriod {
-        val now = LocalTime.now()
-        return when (now) {
-            in daytime -> TimePeriod.DAYTIME
-            in evening -> TimePeriod.EVENING
-            in windingDown -> TimePeriod.WINDING_DOWN
-            else -> TimePeriod.NIGHTTIME
+    override fun plus(d: kotlin.time.Duration): TimeToken = OffsetToken(base, offset + d)
+    override fun minus(d: kotlin.time.Duration): TimeToken = OffsetToken(base, offset - d)
+}
+
+/**
+ * Helper to create a fixed time token from a string like "2am", "14:30", etc.
+ */
+fun time(s: String): TimeToken {
+    val normalized = s.lowercase().trim()
+    val localTime = when {
+        normalized.endsWith("am") || normalized.endsWith("pm") -> {
+            val isPm = normalized.endsWith("pm")
+            val numPart = normalized.dropLast(2).trim()
+            val parts = numPart.split(":")
+            var hour = parts[0].toInt()
+            val minute = if (parts.size > 1) parts[1].toInt() else 0
+            if (isPm && hour != 12) hour += 12
+            if (!isPm && hour == 12) hour = 0
+            LocalTime.of(hour, minute)
         }
+        else -> LocalTime.parse(normalized)
+    }
+    return FixedTimeToken(localTime)
+}
+
+/**
+ * An abstract time window defined by start and end tokens.
+ */
+class Window(val start: TimeToken, val end: TimeToken) {
+
+    /**
+     * Resolve this window for a specific date.
+     * Handles cross-midnight by pushing end to next day if needed.
+     */
+    private fun resolveForDate(date: LocalDate): DateTimeRange {
+        val startDT = start.forDate(date)
+        var endDT = end.forDate(date)
+
+        if (endDT <= startDT) {
+            endDT = end.forDate(date.plusDays(1))
+        }
+
+        return DateTimeRange(startDT, endDT)
     }
 
-    fun getTimeRange(timePeriod: TimePeriod): TimeRange {
-        return when (timePeriod) {
-            TimePeriod.DAYTIME -> daytime
-            TimePeriod.EVENING -> evening
-            TimePeriod.WINDING_DOWN -> windingDown
-            TimePeriod.NIGHTTIME -> nighttime
-        }
+    /**
+     * Resolve this window to a concrete DateTimeRange relative to the given moment.
+     * Returns the range that contains `now`, or the next upcoming range.
+     */
+    fun resolve(now: LocalDateTime): DateTimeRange {
+        val today = now.toLocalDate()
+
+        // Try yesterday (for cases like 1am checking window(sunset, 2am))
+        val yesterdayRange = resolveForDate(today.minusDays(1))
+        if (now in yesterdayRange) return yesterdayRange
+
+        // Try today
+        val todayRange = resolveForDate(today)
+        if (now in todayRange || now < todayRange.start) return todayRange
+
+        // Past today's range - use tomorrow
+        return resolveForDate(today.plusDays(1))
     }
 
-    fun isDayTime() = LocalTime.now() in daytime
-    fun isEvening() = LocalTime.now() in evening
-    fun isWindingDown() = LocalTime.now() in windingDown
-    fun isNightTime() = LocalTime.now() in nighttime
+    /**
+     * Check if the given moment falls within this window.
+     */
+    operator fun contains(now: LocalDateTime): Boolean {
+        val range = resolve(now)
+        return now in range
+    }
+
+    /**
+     * Interpolate a value based on position within this window.
+     */
+    fun interpolate(now: LocalDateTime, startValue: Double, endValue: Double): Double =
+        resolve(now).interpolate(now, startValue, endValue)
+
+    /**
+     * Create a progression of values across this window.
+     */
+    fun <V> withProgression(now: LocalDateTime, values: Iterable<V>): List<Pair<LocalDateTime, V>> =
+        resolve(now).withProgression(values)
 }
+
+/**
+ * Create a window from two time tokens.
+ */
+fun window(start: TimeToken, end: TimeToken) = Window(start, end)
+fun window(start: TimeToken, end: String) = Window(start, time(end))
+fun window(start: String, end: TimeToken) = Window(time(start), end)
+fun window(start: String, end: String) = Window(time(start), time(end))

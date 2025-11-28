@@ -1,16 +1,14 @@
 package symsig.sensei.services
 
 import io.github.oshai.kotlinlogging.KotlinLogging
-import io.ktor.client.HttpClient
-import io.ktor.client.request.get
-import io.ktor.client.statement.bodyAsText
+import io.ktor.client.*
+import io.ktor.client.request.*
+import io.ktor.client.statement.*
 import kotlinx.coroutines.delay
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
-import symsig.sensei.DateTimeRange
-import symsig.sensei.TimeRange
+import symsig.sensei.TimeToken
 import java.io.IOException
-import java.lang.Exception
 import java.time.Duration
 import java.time.LocalDate
 import java.time.LocalDateTime
@@ -18,10 +16,7 @@ import java.time.ZoneId
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.ConcurrentMap
 
-data class SolarDay(val date: LocalDate, val sunrise: LocalDateTime, val sunset: LocalDateTime) {
-
-    val range = DateTimeRange(sunrise, sunset)
-}
+data class SolarDay(val date: LocalDate, val sunrise: LocalDateTime, val sunset: LocalDateTime)
 
 class SolarDayFetchException(message: String, cause: Throwable? = null) : IOException(message, cause)
 
@@ -37,47 +32,22 @@ class SolarService(private val client: HttpClient) {
         return cachedDays[date] ?: getDefaultTimes(date)
     }
 
+    /** TimeToken that resolves to sunset for any given date. */
+    val sunset: TimeToken = object : TimeToken {
+        override fun forDate(date: LocalDate) = dayFor(date).sunset
+    }
+
+    /** TimeToken that resolves to sunrise for any given date. */
+    val sunrise: TimeToken = object : TimeToken {
+        override fun forDate(date: LocalDate) = dayFor(date).sunrise
+    }
+
     val today: SolarDay
         get() = dayFor(LocalDate.now())
 
     val tomorrow: SolarDay
         get() = dayFor(LocalDate.now().plusDays(1))
 
-    /**
-     * Returns the currently relevant sun times.
-     * - If we're before today's sunset: returns today's times
-     * - If we're after today's sunset: returns tomorrow's times
-     *
-     * This ensures you always get the "active" or upcoming sun cycle.
-     */
-    val current: SolarDay
-        get() {
-            val now = LocalDateTime.now()
-            val today = LocalDate.now()
-            val todayTimes = dayFor(today)
-            return if (now.isBefore(todayTimes.sunset)) {
-                todayTimes
-            } else {
-                dayFor(today.plusDays(1))
-            }
-        }
-
-    fun fromSunsetFor(duration: kotlin.time.Duration): TimeRange {
-        val now = LocalDateTime.now()
-        val today = now.toLocalDate()
-        val todaySunset = dayFor(today).sunset
-
-        val sunset = if (now.isAfter(todaySunset.plusNanos(duration.inWholeNanoseconds))) {
-            dayFor(today.plusDays(1)).sunset
-        } else {
-            todaySunset
-        }
-
-        return TimeRange(
-            sunset.toLocalTime(),
-            sunset.toLocalTime().plusNanos(duration.inWholeNanoseconds)
-        )
-    }
 
     private fun getDefaultTimes(day: LocalDate): SolarDay {
         return SolarDay(day, day.atTime(6, 30), day.atTime(19, 30))

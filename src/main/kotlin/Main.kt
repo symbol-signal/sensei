@@ -3,22 +3,18 @@ package symsig.sensei
 import de.kempmobil.ktor.mqtt.Disconnected
 import de.kempmobil.ktor.mqtt.MqttClient
 import io.github.oshai.kotlinlogging.KotlinLogging
-import io.ktor.client.HttpClient
-import io.ktor.client.engine.cio.CIO
+import io.ktor.client.*
+import io.ktor.client.engine.cio.*
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.flow.first
-import symsig.sensei.TimePeriod.DAYTIME
-import symsig.sensei.TimePeriod.EVENING
-import symsig.sensei.TimePeriod.NIGHTTIME
-import symsig.sensei.TimePeriod.WINDING_DOWN
-import symsig.sensei.devices.dimmer.ShellyPro2PMDimmer.Channel.Ch1
-import symsig.sensei.devices.dimmer.ShellyPro2PMDimmer.Channel.Ch2
 import symsig.sensei.devices.dimmer.KinconyD16Dimmer
 import symsig.sensei.devices.dimmer.KinconyD16Dimmer.Channel
 import symsig.sensei.devices.dimmer.ShellyPro2PMDimmer
+import symsig.sensei.devices.dimmer.ShellyPro2PMDimmer.Channel.Ch1
+import symsig.sensei.devices.dimmer.ShellyPro2PMDimmer.Channel.Ch2
 import symsig.sensei.services.SolarService
-import java.time.LocalTime
+import java.time.LocalDateTime.now
 import kotlin.time.Duration.Companion.seconds
 
 private val log = KotlinLogging.logger {}
@@ -37,9 +33,8 @@ fun main() = runBlocking {
     launch {
         solarService.runUpdate()
     }
-    val dayCycle = DayCycle(solarService, LocalTime.of(22, 0), LocalTime.of(23, 59))
 
-    runMqttApplication("central.local", 1883, runRules(dayCycle))
+    runMqttApplication("central.local", 1883, runRules(solarService))
 //    runMqttApplication("central.local", 1883, runTest(sunTimesService))
     log.info { "application_finished_gracefully" }
 }
@@ -85,7 +80,12 @@ suspend fun runMqttApplication(host: String, port: Int, block: suspend Coroutine
     }
 }
 
-fun runRules(dayCycle: DayCycle): suspend CoroutineScope.(MqttClient) -> Unit = { client ->
+fun runRules(solar: SolarService): suspend CoroutineScope.(MqttClient) -> Unit = { client ->
+    val daytime = window(solar.sunrise, solar.sunset)
+    val evening = window(solar.sunset, "22:00")
+    val windingDown = window("22:00", "23:59")
+    val night = window("23:59", solar.sunrise)
+
     val dimmer = ShellyPro2PMDimmer(client, "shellyprodm2pm/rpc", this)
     val bathroomMainSensor = PresenceSensor(
         client, "home/bathroom/binary_sensor/bathroom_mmwave/state", this
@@ -98,11 +98,11 @@ fun runRules(dayCycle: DayCycle): suspend CoroutineScope.(MqttClient) -> Unit = 
     launch {
         val allChannels = CombinedChannel(dimmer.channel(Ch2), delayedMirrorChannel)
         bathroomPresence.state.collect { state ->
-            val (channel, brightness) = when (dayCycle.getCurrentPeriod()) {
-                DAYTIME      -> allChannels to 100
-                EVENING      -> allChannels to dayCycle.evening.interpolate(80.0, 20.0).toInt()
-                WINDING_DOWN -> allChannels to 20
-                NIGHTTIME    -> dimmer.channel(Ch1) to 10
+            val (channel, brightness) = when (val now = now()) {
+                in daytime -> allChannels to 100
+                in evening -> allChannels to evening.interpolate(now, 80.0, 20.0).toInt()
+                in windingDown -> allChannels to 20
+                else -> dimmer.channel(Ch1) to 10
             }
             when (state) {
                 PresenceState.PRESENT -> channel.turnOn(brightness)
@@ -117,7 +117,7 @@ fun runRules(dayCycle: DayCycle): suspend CoroutineScope.(MqttClient) -> Unit = 
             .drop(1)
             .collect { state ->
                 if (state == SwitchState.ON) {
-                    if (dayCycle.isNightTime()) {
+                    if (now() in night) {
                         dimmer.channel(Ch1).toggle()
                     } else {
                         dimmer.channel(Ch1).toggle()
@@ -154,11 +154,11 @@ fun runRules(dayCycle: DayCycle): suspend CoroutineScope.(MqttClient) -> Unit = 
     )
     launch {
         hallwaySensor.state.collect { state ->
-            val (channel, brightness) = when (dayCycle.getCurrentPeriod()) {
-                DAYTIME      -> Channel.Ch6 to 99
-                EVENING      -> Channel.Ch9 to 99
-                WINDING_DOWN -> Channel.Ch9 to 50
-                NIGHTTIME    -> Channel.Ch9 to 35
+            val (channel, brightness) = when (now()) {
+                in daytime -> Channel.Ch6 to 99
+                in evening -> Channel.Ch9 to 99
+                in windingDown -> Channel.Ch9 to 50
+                else -> Channel.Ch9 to 35
             }
 
             when (state) {
