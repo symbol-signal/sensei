@@ -4,7 +4,10 @@ import java.time.Duration
 import java.time.LocalDate
 import java.time.LocalDateTime
 import java.time.LocalTime
+import java.time.format.DateTimeFormatterBuilder
+import java.time.temporal.ChronoField
 import java.time.temporal.ChronoUnit.MILLIS
+import java.util.Locale
 import kotlin.time.toJavaDuration
 
 data class DateTimeRange(val start: LocalDateTime, val end: LocalDateTime) {
@@ -12,7 +15,7 @@ data class DateTimeRange(val start: LocalDateTime, val end: LocalDateTime) {
 
     operator fun contains(dateTime: LocalDateTime): Boolean = dateTime in start..<end
 
-    fun <V> withProgression(values: Iterable<V>): List<Pair<LocalDateTime, V>> {
+    fun <V> spread(values: Iterable<V>): List<Pair<LocalDateTime, V>> {
         val valueList = values.toList()
 
         if (valueList.isEmpty()) return emptyList()
@@ -65,23 +68,23 @@ class OffsetToken(private val base: TimeToken, private val offset: kotlin.time.D
     override fun minus(d: kotlin.time.Duration): TimeToken = OffsetToken(base, offset - d)
 }
 
+private val timeFormatter = DateTimeFormatterBuilder()
+    .parseCaseInsensitive()
+    .appendValue(ChronoField.CLOCK_HOUR_OF_AMPM)
+    .optionalStart().appendLiteral(':').appendValue(ChronoField.MINUTE_OF_HOUR, 2).optionalEnd()
+    .appendText(ChronoField.AMPM_OF_DAY)
+    .parseDefaulting(ChronoField.MINUTE_OF_HOUR, 0)
+    .toFormatter(Locale.ENGLISH)
+
 /**
  * Helper to create a fixed time token from a string like "2am", "14:30", etc.
  */
 fun time(s: String): TimeToken {
-    val normalized = s.lowercase().trim()
-    val localTime = when {
-        normalized.endsWith("am") || normalized.endsWith("pm") -> {
-            val isPm = normalized.endsWith("pm")
-            val numPart = normalized.dropLast(2).trim()
-            val parts = numPart.split(":")
-            var hour = parts[0].toInt()
-            val minute = if (parts.size > 1) parts[1].toInt() else 0
-            if (isPm && hour != 12) hour += 12
-            if (!isPm && hour == 12) hour = 0
-            LocalTime.of(hour, minute)
-        }
-        else -> LocalTime.parse(normalized)
+    val normalized = s.trim()
+    val localTime = try {
+        LocalTime.parse(normalized, timeFormatter)
+    } catch (_: Exception) {
+        LocalTime.parse(normalized)
     }
     return FixedTimeToken(localTime)
 }
@@ -140,10 +143,10 @@ class Window(val start: TimeToken, val end: TimeToken) {
         resolve(now).interpolate(now, startValue, endValue)
 
     /**
-     * Create a progression of values across this window.
+     * Spread values evenly across this window.
      */
-    fun <V> withProgression(now: LocalDateTime, values: Iterable<V>): List<Pair<LocalDateTime, V>> =
-        resolve(now).withProgression(values)
+    fun <V> spread(now: LocalDateTime, values: Iterable<V>): List<Pair<LocalDateTime, V>> =
+        resolve(now).spread(values)
 }
 
 /**

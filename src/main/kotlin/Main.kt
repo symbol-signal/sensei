@@ -14,7 +14,9 @@ import symsig.sensei.devices.dimmer.ShellyPro2PMDimmer
 import symsig.sensei.devices.dimmer.ShellyPro2PMDimmer.Channel.Ch1
 import symsig.sensei.devices.dimmer.ShellyPro2PMDimmer.Channel.Ch2
 import symsig.sensei.services.SolarService
+import symsig.sensei.util.schedule.RollingScheduler
 import java.time.LocalDateTime.now
+import kotlin.time.Duration.Companion.hours
 import kotlin.time.Duration.Companion.seconds
 
 private val log = KotlinLogging.logger {}
@@ -149,6 +151,14 @@ fun runRules(solar: SolarService): suspend CoroutineScope.(MqttClient) -> Unit =
             Channel.Ch6 to 21..41,
         )
     )
+
+    launch {
+        RollingScheduler(
+            schedule = { window(solar.sunset, solar.sunset + 3.hours).spread(now(), 100 downTo 50) },
+            action = { kinconyDimmer.channel(Channel.Ch2).setBrightness(it) }
+        ).run()
+    }
+
     val hallwaySensor = PresenceSensor(
         client, "home/bathroom/binary_sensor/hallway_mmwave/state", this, absentDelay = 2.seconds
     )

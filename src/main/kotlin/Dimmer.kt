@@ -11,6 +11,8 @@ interface DimmerChannel {
     suspend fun turnOff()
 
     suspend fun toggle()
+
+    suspend fun setBrightness(value: Int)
 }
 
 class DelayableChannel(
@@ -23,6 +25,7 @@ class DelayableChannel(
     override suspend fun turnOn(brightness: Int?) = turnOn(defaultDelay, brightness)
     override suspend fun turnOff() = turnOff(defaultDelay)
     override suspend fun toggle() = toggle(defaultDelay)
+    override suspend fun setBrightness(value: Int) = setBrightness(defaultDelay, value)
 
     fun turnOn(delay: Duration = defaultDelay, brightness: Int? = null) {
         scheduler.schedule(delay) { channel.turnOn(brightness) }
@@ -34,6 +37,10 @@ class DelayableChannel(
 
     fun toggle(delay: Duration = defaultDelay) {
         scheduler.schedule(delay) { channel.toggle() }
+    }
+
+    fun setBrightness(delay: Duration = defaultDelay, value: Int) {
+        scheduler.schedule(delay) { channel.setBrightness(value) }
     }
 
     fun cancel() = scheduler.cancel()
@@ -77,5 +84,12 @@ class CombinedChannel(private val channels: List<DimmerChannel>) : DimmerChannel
      */
     override suspend fun toggle() {
         channels.forEach { it.toggle() }
+    }
+
+    /**
+     * Sets brightness on all channels sequentially.
+     */
+    override suspend fun setBrightness(value: Int) {
+        channels.forEach { it.setBrightness(value) }
     }
 }

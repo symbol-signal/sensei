@@ -18,9 +18,9 @@ class NewSchedulerTest {
         )
 
         // Different progressions over the same time range
-        val brightening = timeRange.withProgression(0..100 step 10)
-        val dimming = timeRange.withProgression(100 downTo 0 step 5)
-        val temperatures = timeRange.withProgression(listOf(2700, 3000, 3500, 4000, 5000))
+        val brightening = timeRange.spread(0..100 step 10)
+        val dimming = timeRange.spread(100 downTo 0 step 5)
+        val temperatures = timeRange.spread(listOf(2700, 3000, 3500, 4000, 5000))
 
         brightening.forEach { (time, value) ->
             println("$time -> $value%")

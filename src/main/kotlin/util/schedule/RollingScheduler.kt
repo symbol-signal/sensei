@@ -8,17 +8,15 @@ import java.time.LocalDateTime
 
 private val log = KotlinLogging.logger {}
 
-typealias ScheduleProvider<V> = suspend () -> Collection<Pair<LocalDateTime, V>>
-
 class RollingScheduler<V>(
-    private val scheduleProvider: ScheduleProvider<V>,
-    private val action: (V) -> Unit,
+    private val schedule: suspend () -> Collection<Pair<LocalDateTime, V>>,
+    private val action: suspend (V) -> Unit,
     private val clock: Clock = Clock.systemDefaultZone()
 ) {
 
     suspend fun run() {
         while (true) {
-            val sortedSchedule = scheduleProvider().sortedBy { it.first }
+            val sortedSchedule = schedule().sortedBy { it.first }
             if (sortedSchedule.isEmpty()) {
                 log.debug { "empty_schedule_returned action=[wait_and_retry]" }
                 delay(10_000)

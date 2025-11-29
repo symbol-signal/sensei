@@ -58,6 +58,13 @@ class ShellyPro2PMDimmer(private val mqtt: MqttClient, private val topic: String
                 payload(json.encodeToString(message))
             })
         }
+
+        override suspend fun setBrightness(value: Int) {
+            val message = ShellyRpc(method = "Light.Set", params = LightSetParams(channel.id, brightness = value))
+            mqtt.publish(PublishRequest(topic) {
+                payload(json.encodeToString(message))
+            })
+        }
     }
 
     fun channel(channel: Channel): DimmerChannel {

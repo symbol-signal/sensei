@@ -126,7 +126,7 @@ class KinconyD16Dimmer(
             }
         }
 
-        suspend fun setBrightness(value: Int) {
+        override suspend fun setBrightness(value: Int) {
             checkDimmerValue(value)
             if (isOn.value) {
                 sendDimmerValue(value)
