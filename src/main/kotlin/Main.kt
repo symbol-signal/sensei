@@ -154,7 +154,11 @@ fun runRules(solar: SolarService): suspend CoroutineScope.(MqttClient) -> Unit =
 
     launch {
         RollingScheduler(
-            schedule = { window(solar.sunset, solar.sunset + 3.hours).spread(now(), 100 downTo 50) },
+            schedule = {
+                val now = now()
+                (solar.sunset to solar.sunset + 3.hours).spread(now, 100 downTo 50) +
+                (solar.sunset + 3.hours to solar.sunset + 5.hours).spread(now, 50 downTo 0)
+            },
             action = { kinconyDimmer.channel(Channel.Ch2).setBrightness(it) }
         ).run()
     }

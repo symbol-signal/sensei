@@ -48,6 +48,7 @@ interface TimeToken {
 
     operator fun plus(d: kotlin.time.Duration): TimeToken = OffsetToken(this, d)
     operator fun minus(d: kotlin.time.Duration): TimeToken = OffsetToken(this, -d)
+    infix fun to(other: TimeToken): Window = Window(this, other)
 }
 
 /**
