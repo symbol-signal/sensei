@@ -151,6 +151,26 @@ class Window(val start: TimeToken, val end: TimeToken) {
 }
 
 /**
+ * A schedule segment that resolves to time/value pairs.
+ */
+typealias Schedule<V> = (LocalDateTime) -> List<Pair<LocalDateTime, V>>
+
+/**
+ * Creates a schedule that spreads values evenly across this window.
+ */
+infix fun <V> Window.spread(values: Iterable<V>): Schedule<V> = { now ->
+    this.spread(now, values)
+}
+
+/**
+ * Combines multiple schedules into a single suspend function.
+ */
+fun <V> schedules(vararg parts: Schedule<V>): suspend () -> List<Pair<LocalDateTime, V>> = {
+    val now = LocalDateTime.now()
+    parts.flatMap { it(now) }
+}
+
+/**
  * Create a window from two time tokens.
  */
 fun window(start: TimeToken, end: TimeToken) = Window(start, end)
