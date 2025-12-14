@@ -49,6 +49,13 @@ interface TimeToken {
     operator fun plus(d: kotlin.time.Duration): TimeToken = OffsetToken(this, d)
     operator fun minus(d: kotlin.time.Duration): TimeToken = OffsetToken(this, -d)
     infix fun to(other: TimeToken): Window = Window(this, other)
+
+    infix fun <V> set(value: V): Schedule<V> = { now ->
+        val today = now.toLocalDate()
+        val resolved = forDate(today)
+        val finalTime = if (resolved < now) forDate(today.plusDays(1)) else resolved
+        listOf(finalTime to value)
+    }
 }
 
 /**
@@ -148,19 +155,19 @@ class Window(val start: TimeToken, val end: TimeToken) {
      */
     fun <V> spread(now: LocalDateTime, values: Iterable<V>): List<Pair<LocalDateTime, V>> =
         resolve(now).spread(values)
+
+    /**
+     * Creates a schedule that spreads values evenly across this window.
+     */
+    infix fun <V> spread(values: Iterable<V>): Schedule<V> = { now ->
+        this.spread(now, values)
+    }
 }
 
 /**
  * A schedule segment that resolves to time/value pairs.
  */
 typealias Schedule<V> = (LocalDateTime) -> List<Pair<LocalDateTime, V>>
-
-/**
- * Creates a schedule that spreads values evenly across this window.
- */
-infix fun <V> Window.spread(values: Iterable<V>): Schedule<V> = { now ->
-    this.spread(now, values)
-}
 
 /**
  * Combines multiple schedules into a single suspend function.
