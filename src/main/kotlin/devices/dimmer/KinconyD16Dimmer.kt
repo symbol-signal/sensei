@@ -3,7 +3,6 @@ package symsig.sensei.devices.dimmer
 import de.kempmobil.ktor.mqtt.MqttClient
 import de.kempmobil.ktor.mqtt.PublishRequest
 import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.distinctUntilChanged
@@ -93,25 +92,55 @@ class KinconyD16Dimmer(
 
     inner class KinconyD16Channel(val channel: Channel, val brightness: StateFlow<Int>) : DimmerChannel {
 
+        /** Whether the light is currently on (brightness > 0). */
         val isOn: StateFlow<Boolean> = brightness
             .map { it > 0 }
             .distinctUntilChanged()
             .stateIn(scope, SharingStarted.WhileSubscribed(5000), brightness.value > 0)
 
-        private val _lastSetBrightness = MutableStateFlow(99)
-        val lastSetBrightness: StateFlow<Int> get() = _lastSetBrightness
+        /**
+         * Last known non-zero brightness from hardware state.
+         * Used as fallback when turning on without a specified brightness.
+         */
+        val lastBrightness: StateFlow<Int> = brightness
+            .filter { it > 0 }
+            .stateIn(scope, SharingStarted.WhileSubscribed(5000), 99)
+
+        /**
+         * Brightness value set programmatically via [setBrightness].
+         *
+         * When set while the light is off, this value will be automatically applied
+         * when the light turns on (either programmatically or via physical switch).
+         *
+         * Also used for manual override detection: if [brightness] differs from this value
+         * while the light is on, it indicates the user manually changed the brightness,
+         * and subsequent [setBrightness] calls will be ignored until the next on/off cycle.
+         */
+        private var programmaticBrightness: Int? = null
 
         private val json = Json { encodeDefaults = true }
 
         init {
-            brightness
-                .filter { it > 0 }
-                .onEach { _lastSetBrightness.value = it }
+            // When light turns on, apply programmatic brightness if set.
+            // This enables "set brightness while off, apply when turned on" behavior,
+            // including when the light is turned on manually via physical switch.
+            isOn
+                .filter { it }
+                .onEach {
+                    programmaticBrightness?.let { target ->
+                        sendDimmerValue(target)
+                    }
+                }
                 .launchIn(scope)
         }
 
+        /**
+         * Turns on the light with the specified brightness.
+         *
+         * Priority: [brightness] parameter > [programmaticBrightness] > [lastBrightness]
+         */
         override suspend fun turnOn(brightness: Int?) {
-            sendDimmerValue(brightness ?: lastSetBrightness.value)
+            sendDimmerValue(brightness ?: programmaticBrightness ?: lastBrightness.value)
         }
 
         override suspend fun turnOff() {
@@ -127,11 +156,40 @@ class KinconyD16Dimmer(
         }
 
         override suspend fun setBrightness(value: Int) {
+            setBrightness(value, forceOverride = false)
+        }
+
+        /**
+         * Sets the target brightness for this channel.
+         *
+         * **When light is off:** The value is stored in [programmaticBrightness] and will be
+         * applied when the light turns on (either programmatically or via physical switch).
+         *
+         * **When light is on:** The value is applied immediately, unless manual override is
+         * detected. Manual override occurs when the current [brightness] differs from
+         * [programmaticBrightness], indicating the user changed it via physical controls.
+         * In this case, the call is ignored to respect user intent.
+         *
+         * **Manual override reset:** The override state resets when the light is turned off
+         * and back on (a new "cycle"), allowing programmatic control to resume.
+         *
+         * @param value Brightness level (0-99)
+         * @param forceOverride If true, bypasses manual override detection. Use this for
+         *   intentional rapid consecutive changes (e.g., fade animations, UI sliders).
+         */
+        suspend fun setBrightness(value: Int, forceOverride: Boolean) {
             checkDimmerValue(value)
-            if (isOn.value) {
-                sendDimmerValue(value)
-            } else {
-                _lastSetBrightness.value = value
+
+            val canSet = forceOverride ||
+                         !isOn.value ||
+                         programmaticBrightness == null ||
+                         brightness.value == programmaticBrightness
+
+            if (canSet) {
+                programmaticBrightness = value
+                if (isOn.value) {
+                    sendDimmerValue(value)
+                }
             }
         }
 
