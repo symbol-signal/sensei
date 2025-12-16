@@ -86,8 +86,8 @@ suspend fun runMqttApplication(host: String, port: Int, block: suspend Coroutine
 fun runRules(solar: SolarService): suspend CoroutineScope.(MqttClient) -> Unit = { client ->
     val daytime = window(solar.sunrise, solar.sunset)
     val evening = window(solar.sunset, "22:00")
-    val windingDown = window("22:00", "23:59")
-    val night = window("23:59", solar.sunrise)
+    val windingDown = window("22:00", "23:00")
+    val night = window("23:00", solar.sunrise)
 
     val dimmer = ShellyPro2PMDimmer(client, "shellyprodm2pm/rpc", this)
     val bathroomMainSensor = PresenceSensor(
@@ -104,7 +104,7 @@ fun runRules(solar: SolarService): suspend CoroutineScope.(MqttClient) -> Unit =
             val (channel, brightness) = when (val now = now()) {
                 in daytime -> allChannels to 100
                 in evening -> allChannels to evening.interpolate(now, 80.0, 20.0).toInt()
-                in windingDown -> allChannels to 20
+                in windingDown -> dimmer.channel(Ch1) to 30
                 else -> dimmer.channel(Ch1) to 10
             }
             when (state) {
