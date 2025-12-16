@@ -30,17 +30,29 @@ class RollingScheduler<V>(
      * Starts the scheduler. Runs indefinitely until cancelled.
      */
     suspend fun run() {
+        var isFirstRun = true
         while (true) {
             val sortedSchedule = schedule()
                 .associateBy { it.first }
                 .values
                 .sortedBy { it.first }
             if (sortedSchedule.isEmpty()) {
-                log.info { "empty_schedule_returned action=[wait_and_retry]" }
+                log.debug { "empty_schedule_returned action=[wait_and_retry]" }
                 delay(10_000)
                 continue
             }
             log.debug { "schedule_loaded entries=${sortedSchedule.size} first=${sortedSchedule.first().first} last=${sortedSchedule.last().first}" }
+
+            if (isFirstRun) {
+                val now = LocalDateTime.now(clock)
+                if (sortedSchedule.first().first > now) {
+                    val initial = sortedSchedule.last()
+                    log.debug { "executing_initial value=${initial.second}" }
+                    action(initial.second)
+                }
+                isFirstRun = false
+            }
+
             runForSchedule(sortedSchedule)
         }
     }
