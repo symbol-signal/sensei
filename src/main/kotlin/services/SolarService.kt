@@ -12,6 +12,7 @@ import java.io.IOException
 import java.time.Duration
 import java.time.LocalDate
 import java.time.LocalDateTime
+import java.time.OffsetDateTime
 import java.time.ZoneId
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.ConcurrentMap
@@ -63,8 +64,8 @@ class SolarService(private val client: HttpClient) {
         val respObj = json.decodeFromString<SunriseSunsetResponse>(resp.bodyAsText())
         return SolarDay(
             date = day,
-            sunrise = LocalDateTime.parse(respObj.results.sunrise),
-            sunset = LocalDateTime.parse(respObj.results.sunset)
+            sunrise = OffsetDateTime.parse(respObj.results.sunrise).toLocalDateTime(),
+            sunset = OffsetDateTime.parse(respObj.results.sunset).toLocalDateTime()
         )
     }
 

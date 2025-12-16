@@ -36,10 +36,11 @@ class RollingScheduler<V>(
                 .values
                 .sortedBy { it.first }
             if (sortedSchedule.isEmpty()) {
-                log.debug { "empty_schedule_returned action=[wait_and_retry]" }
+                log.info { "empty_schedule_returned action=[wait_and_retry]" }
                 delay(10_000)
                 continue
             }
+            log.debug { "schedule_loaded entries=${sortedSchedule.size} first=${sortedSchedule.first().first} last=${sortedSchedule.last().first}" }
             runForSchedule(sortedSchedule)
         }
     }
@@ -48,11 +49,16 @@ class RollingScheduler<V>(
         val now = LocalDateTime.now(clock)
         val (past, future) = schedule.partition { it.first <= now }
 
-        past.lastOrNull()?.let { action(it.second) }
+        past.lastOrNull()?.let {
+            log.debug { "executing time=${it.first} value=${it.second}" }
+            action(it.second)
+        }
 
         val next = future.firstOrNull()
         if (next != null) {
-            delay(Duration.between(now, next.first).toMillis().coerceAtLeast(0))
+            val delayMs = Duration.between(now, next.first).toMillis().coerceAtLeast(0)
+            log.debug { "waiting next=${next.first} delay_ms=$delayMs" }
+            delay(delayMs)
             runForSchedule(future)
         }
     }

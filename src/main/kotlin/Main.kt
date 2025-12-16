@@ -32,6 +32,7 @@ fun main() = runBlocking {
     })
 
     val solarService = SolarService(HttpClient(CIO))
+    solarService.update()
     launch {
         solarService.runUpdate()
     }
