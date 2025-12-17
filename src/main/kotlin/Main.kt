@@ -17,6 +17,7 @@ import symsig.sensei.services.SolarService
 import symsig.sensei.util.schedule.RollingScheduler
 import java.time.LocalDateTime.now
 import kotlin.time.Duration.Companion.hours
+import kotlin.time.Duration.Companion.minutes
 import kotlin.time.Duration.Companion.seconds
 
 private val log = KotlinLogging.logger {}
@@ -138,6 +139,16 @@ fun runRules(solar: SolarService): suspend CoroutineScope.(MqttClient) -> Unit =
             .collect { state ->
                 if (state == SwitchState.ON) bathroomFan.toggle()
             }
+    }
+    launch {
+        val delayedFan = DelayableRelay(bathroomFan, this, 45.seconds)
+        bathroomShowerSensor.state.collect { state ->
+            if (state == PresenceState.PRESENT) {
+                delayedFan.turnOn()
+            } else {
+                delayedFan.cancel()
+            }
+        }
     }
 
     val kinconyDimmer = KinconyD16Dimmer(
