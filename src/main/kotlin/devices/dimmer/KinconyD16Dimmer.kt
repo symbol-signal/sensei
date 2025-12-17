@@ -1,11 +1,15 @@
 package symsig.sensei.devices.dimmer
 
+import io.github.oshai.kotlinlogging.KotlinLogging
 import de.kempmobil.ktor.mqtt.MqttClient
 import de.kempmobil.ktor.mqtt.PublishRequest
+import de.kempmobil.ktor.mqtt.buildFilterList
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.map
@@ -22,6 +26,8 @@ import symsig.sensei.DimmerChannel
 import java.util.concurrent.ConcurrentHashMap
 import kotlin.math.roundToInt
 
+private val log = KotlinLogging.logger {}
+
 private val DEFAULT_RANGE = 0..99
 
 
@@ -37,11 +43,18 @@ class KinconyD16Dimmer(
     effectiveRanges: Map<Channel, IntRange> = mapOf()
 ) {
 
+    // Eagerly starts collecting immediately, ensuring retained MQTT messages are captured
+    // even before any downstream subscribers exist. WhileSubscribed would miss retained
+    // messages delivered on subscription if no one is subscribed to state yet.
     val state: StateFlow<Map<Channel, Int>> =
         mqtt.publishedPackets
             .filter { it.topic.name == stateTopic }
             .map { parseDimmerStates(it.payload) }
-            .stateIn(scope, SharingStarted.WhileSubscribed(), Channel.entries.associateWith { 0 })
+            .stateIn(scope, SharingStarted.Eagerly, Channel.entries.associateWith { 0 })
+
+    init {
+        scope.launch { mqtt.subscribe(buildFilterList { +stateTopic }) }
+    }
 
     private val channelInstances = ConcurrentHashMap<Channel, KinconyD16Channel>()
 
@@ -121,6 +134,13 @@ class KinconyD16Dimmer(
         private val json = Json { encodeDefaults = true }
 
         init {
+            brightness
+                .drop(1)  // Skip initial StateFlow value, only log actual MQTT updates
+                .onEach { value ->
+                    log.debug { "kincony_dimmer_state channel=$channel brightness=$value" }
+                }
+                .launchIn(scope)
+
             // When light turns on, apply programmatic brightness if set.
             // This enables "set brightness while off, apply when turned on" behavior,
             // including when the light is turned on manually via physical switch.
@@ -128,7 +148,10 @@ class KinconyD16Dimmer(
                 .filter { it }
                 .onEach {
                     programmaticBrightness?.let { target ->
-                        sendDimmerValue(target)
+                        if (brightness.value != target) {
+                            log.debug { "kincony_brightness_reset channel=$channel brightness=$target" }
+                            sendDimmerValue(target)
+                        }
                     }
                 }
                 .launchIn(scope)
@@ -196,6 +219,7 @@ class KinconyD16Dimmer(
         private suspend fun sendDimmerValue(value: Int) {
             checkDimmerValue(value)
             val effectiveVal = mapToRange(value, effectiveRanges[channel] ?: DEFAULT_RANGE)
+            log.debug { "kincony_dimmer_set channel=$channel value=$value effective=$effectiveVal current_brightness=${brightness.value}" }
             mqtt.publish(PublishRequest(setTopic) {
                 payload(json.encodeToString(mapOf("dimmer${channel.id}" to mapOf("value" to effectiveVal))))
             })
