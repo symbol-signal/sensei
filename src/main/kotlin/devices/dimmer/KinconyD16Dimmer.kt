@@ -81,6 +81,21 @@ class KinconyD16Dimmer(
         return (((value - range.first) / rangeLength.toDouble()) * 99).roundToInt().coerceIn(0, 99)
     }
 
+    /**
+     * Calculates the maximum roundtrip error when converting logical brightness (0-99)
+     * to effective hardware value and back. Narrower ranges amplify rounding errors.
+     *
+     * Formula: ceil(0.5 * (99/rangeLength + 1))
+     * - rangeLength=99 → tolerance=1
+     * - rangeLength=41 → tolerance=2
+     * - rangeLength=20 → tolerance=3
+     */
+    private fun roundtripTolerance(channel: Channel): Int {
+        val range = effectiveRanges[channel] ?: DEFAULT_RANGE
+        val rangeLength = range.last - range.first
+        return kotlin.math.ceil(0.5 * (99.0 / rangeLength + 1)).toInt()
+    }
+
     private fun parseDimmerStates(jsonString: ByteString): Map<Channel, Int> {
         val dimmerStateJson = json.parseToJsonElement(jsonString.decodeToString()).jsonObject
         return Channel.entries.associateWith { channel ->
@@ -203,14 +218,10 @@ class KinconyD16Dimmer(
         suspend fun setBrightness(value: Int, forceOverride: Boolean) {
             checkDimmerValue(value)
 
-            // Tolerance of ±1 accounts for rounding errors in brightness conversion.
-            // mapToRange and mapFromRange can cause values to not roundtrip perfectly
-            // (e.g., 63 → effective 33 → reads back as 64), which would otherwise
-            // block subsequent setBrightness calls due to false manual override detection.
             val canSet = forceOverride ||
-                         !isOn.value ||
-                         programmaticBrightness == null ||
-                         kotlin.math.abs(brightness.value - programmaticBrightness!!) <= 1
+                    !isOn.value ||
+                    programmaticBrightness == null ||
+                    kotlin.math.abs(brightness.value - programmaticBrightness!!) <= roundtripTolerance(channel)
 
             // Always update the target, even if we can't apply it now.
             // This ensures the latest programmatic intent is applied on next on-cycle.
