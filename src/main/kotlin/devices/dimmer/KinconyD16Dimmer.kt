@@ -203,16 +203,21 @@ class KinconyD16Dimmer(
         suspend fun setBrightness(value: Int, forceOverride: Boolean) {
             checkDimmerValue(value)
 
+            // Tolerance of ±1 accounts for rounding errors in brightness conversion.
+            // mapToRange and mapFromRange can cause values to not roundtrip perfectly
+            // (e.g., 63 → effective 33 → reads back as 64), which would otherwise
+            // block subsequent setBrightness calls due to false manual override detection.
             val canSet = forceOverride ||
                          !isOn.value ||
                          programmaticBrightness == null ||
-                         brightness.value == programmaticBrightness
+                         kotlin.math.abs(brightness.value - programmaticBrightness!!) <= 1
 
-            if (canSet) {
-                programmaticBrightness = value
-                if (isOn.value) {
-                    sendDimmerValue(value)
-                }
+            // Always update the target, even if we can't apply it now.
+            // This ensures the latest programmatic intent is applied on next on-cycle.
+            programmaticBrightness = value
+
+            if (canSet && isOn.value) {
+                sendDimmerValue(value)
             }
         }
 
