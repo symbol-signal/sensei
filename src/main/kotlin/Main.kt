@@ -17,7 +17,6 @@ import symsig.sensei.services.SolarService
 import symsig.sensei.util.schedule.RollingScheduler
 import java.time.LocalDateTime.now
 import kotlin.time.Duration.Companion.hours
-import kotlin.time.Duration.Companion.minutes
 import kotlin.time.Duration.Companion.seconds
 
 private val log = KotlinLogging.logger {}
@@ -39,7 +38,7 @@ fun main() = runBlocking {
     }
 
     runMqttApplication("central.local", 1883, runRules(solarService))
-//    runMqttApplication("central.local", 1883, runTest(sunTimesService))
+//    runMqttApplication("central.local", 1883, runTest(solarService))
     log.info { "application_finished_gracefully" }
 }
 
@@ -158,7 +157,7 @@ fun runRules(solar: SolarService): suspend CoroutineScope.(MqttClient) -> Unit =
         this,
         mapOf(
             Channel.Ch1 to 17..45,
-            Channel.Ch2 to 10..40,
+            Channel.Ch2 to 20..40,
             Channel.Ch3 to 20..32,
             Channel.Ch6 to 21..41,
         )
@@ -194,5 +193,5 @@ fun runRules(solar: SolarService): suspend CoroutineScope.(MqttClient) -> Unit =
     }
 }
 
-//fun runTest(sunTimesService: SunTimesService): suspend CoroutineScope.(MqttClient) -> Unit = { client ->
+//fun runTest(solar: SolarService): suspend CoroutineScope.(MqttClient) -> Unit = { client ->
 //}
