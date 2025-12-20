@@ -1,7 +1,7 @@
 package symsig.sensei
 
-import de.kempmobil.ktor.mqtt.MqttClient
 import de.kempmobil.ktor.mqtt.buildFilterList
+import symsig.sensei.mqtt.Mqtt
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.delay
@@ -32,7 +32,7 @@ enum class PresenceState {
 }
 
 class PresenceSensor(
-    private val mqtt: MqttClient,
+    private val mqtt: Mqtt,
     val topic: String,
     scope: CoroutineScope,
     val presentDelay: Duration = Duration.ZERO,

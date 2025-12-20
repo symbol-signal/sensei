@@ -10,6 +10,7 @@ import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.flow.first
 import symsig.sensei.devices.dimmer.KinconyD16Dimmer
 import symsig.sensei.devices.dimmer.KinconyD16Dimmer.Channel
+import symsig.sensei.mqtt.MqttClientAdapter
 import symsig.sensei.devices.dimmer.ShellyPro2PMDimmer
 import symsig.sensei.devices.dimmer.ShellyPro2PMDimmer.Channel.Ch1
 import symsig.sensei.devices.dimmer.ShellyPro2PMDimmer.Channel.Ch2
@@ -84,17 +85,18 @@ suspend fun runMqttApplication(host: String, port: Int, block: suspend Coroutine
 }
 
 fun runRules(solar: SolarService): suspend CoroutineScope.(MqttClient) -> Unit = { client ->
+    val mqtt = MqttClientAdapter(client)
     val daytime = window(solar.sunrise, solar.sunset)
     val evening = window(solar.sunset, "22:00")
     val windingDown = window("22:00", "23:00")
     val night = window("23:00", solar.sunrise)
 
-    val dimmer = ShellyPro2PMDimmer(client, "shellyprodm2pm/rpc", this)
+    val dimmer = ShellyPro2PMDimmer(mqtt, "shellyprodm2pm/rpc", this)
     val bathroomMainSensor = PresenceSensor(
-        client, "home/bathroom/binary_sensor/bathroom_mmwave/state", this
+        mqtt, "home/bathroom/binary_sensor/bathroom_mmwave/state", this
     )
     val bathroomShowerSensor = PresenceSensor(
-        client, "home/bathroom/binary_sensor/shower_presence/state", this, absentDelay = 10.seconds
+        mqtt, "home/bathroom/binary_sensor/shower_presence/state", this, absentDelay = 10.seconds
     )
     val bathroomPresence = CombinedPresenceSensor(bathroomMainSensor, bathroomShowerSensor, scope = this)
     val delayedMirrorChannel = DelayableChannel(dimmer.channel(Ch1), this, 3.seconds)
@@ -114,7 +116,7 @@ fun runRules(solar: SolarService): suspend CoroutineScope.(MqttClient) -> Unit =
         }
     }
 
-    val bathroomLightSwitch = Switch(client, "home/bathroom/switch/1/state", this)
+    val bathroomLightSwitch = Switch(mqtt, "home/bathroom/switch/1/state", this)
     launch {
         bathroomLightSwitch.state
             .drop(1)
@@ -130,8 +132,8 @@ fun runRules(solar: SolarService): suspend CoroutineScope.(MqttClient) -> Unit =
             }
     }
 
-    val bathroomFan = ShellyPlus1PMRelay(client, "shellyplus1pm-fan/rpc", this)
-    val bathroomFanSwitch = Switch(client, "home/bathroom/switch/2/state", this)
+    val bathroomFan = ShellyPlus1PMRelay(mqtt, "shellyplus1pm-fan/rpc", this)
+    val bathroomFanSwitch = Switch(mqtt, "home/bathroom/switch/2/state", this)
     launch {
         bathroomFanSwitch.state
             .drop(1)
@@ -151,7 +153,7 @@ fun runRules(solar: SolarService): suspend CoroutineScope.(MqttClient) -> Unit =
     }
 
     val kinconyDimmer = KinconyD16Dimmer(
-        client,
+        mqtt,
         "dimmer/d96c4bd0672e64279c34a168/state",
         "dimmer/d96c4bd0672e64279c34a168/set",
         this,
@@ -174,7 +176,7 @@ fun runRules(solar: SolarService): suspend CoroutineScope.(MqttClient) -> Unit =
     }
 
     val hallwaySensor = PresenceSensor(
-        client, "home/bathroom/binary_sensor/hallway_mmwave/state", this, absentDelay = 2.seconds
+        mqtt, "home/bathroom/binary_sensor/hallway_mmwave/state", this, absentDelay = 2.seconds
     )
     launch {
         hallwaySensor.state.collect { state ->

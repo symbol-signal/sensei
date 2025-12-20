@@ -1,7 +1,7 @@
 package symsig.sensei
 
-import de.kempmobil.ktor.mqtt.MqttClient
 import de.kempmobil.ktor.mqtt.PublishRequest
+import symsig.sensei.mqtt.Mqtt
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
@@ -15,7 +15,7 @@ interface Relay {
     suspend fun toggle()
 }
 
-class ShellyPlus1PMRelay(private val mqtt: MqttClient, private val topic: String, scope: CoroutineScope) : Relay {
+class ShellyPlus1PMRelay(private val mqtt: Mqtt, private val topic: String, scope: CoroutineScope) : Relay {
 
     @Serializable
     data class ToggleParams(val id: Int = 0)

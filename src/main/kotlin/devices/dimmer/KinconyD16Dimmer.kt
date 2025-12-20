@@ -1,9 +1,9 @@
 package symsig.sensei.devices.dimmer
 
 import io.github.oshai.kotlinlogging.KotlinLogging
-import de.kempmobil.ktor.mqtt.MqttClient
 import de.kempmobil.ktor.mqtt.PublishRequest
 import de.kempmobil.ktor.mqtt.buildFilterList
+import symsig.sensei.mqtt.Mqtt
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.flow.SharingStarted
@@ -36,7 +36,7 @@ private fun checkDimmerValue(value: Int) {
 }
 
 class KinconyD16Dimmer(
-    private val mqtt: MqttClient,
+    private val mqtt: Mqtt,
     private val stateTopic: String,
     private val setTopic: String,
     private val scope: CoroutineScope,

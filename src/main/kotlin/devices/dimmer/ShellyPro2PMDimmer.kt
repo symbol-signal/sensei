@@ -1,7 +1,7 @@
 package symsig.sensei.devices.dimmer
 
-import de.kempmobil.ktor.mqtt.MqttClient
 import de.kempmobil.ktor.mqtt.PublishRequest
+import symsig.sensei.mqtt.Mqtt
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
@@ -20,7 +20,7 @@ import symsig.sensei.DimmerChannel
  * @property topic The MQTT topic for this device (typically "{id}/rpc")
  * @property scope The coroutine scope for async operations
  */
-class ShellyPro2PMDimmer(private val mqtt: MqttClient, private val topic: String, scope: CoroutineScope) {
+class ShellyPro2PMDimmer(private val mqtt: Mqtt, private val topic: String, scope: CoroutineScope) {
 
     @Serializable
     data class LightSetParams(val id: Int, val on: Boolean? = null, val brightness: Int? = null)

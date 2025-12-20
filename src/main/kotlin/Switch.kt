@@ -1,7 +1,7 @@
 package symsig.sensei
 
-import de.kempmobil.ktor.mqtt.MqttClient
 import de.kempmobil.ktor.mqtt.buildFilterList
+import symsig.sensei.mqtt.Mqtt
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -26,7 +26,7 @@ enum class SwitchState {
     }
 }
 
-class Switch(private val mqtt: MqttClient, private val topic: String, scope: CoroutineScope) {
+class Switch(private val mqtt: Mqtt, private val topic: String, scope: CoroutineScope) {
 
     val state: StateFlow<SwitchState> =
         mqtt.publishedPackets
