@@ -76,9 +76,10 @@ class KinconyD16Dimmer(
     }
 
     private fun mapFromRange(value: Int, range: IntRange): Int {
-        if (value <= range.first) return 0
+        if (value == 0) return 0  // Only hardware 0 means off
+        if (value < range.first) return 1  // Below range but on → minimum "on"
         val rangeLength = range.last - range.first
-        return (((value - range.first) / rangeLength.toDouble()) * 99).roundToInt().coerceIn(0, 99)
+        return (((value - range.first) / rangeLength.toDouble()) * 99).roundToInt().coerceIn(1, 99)
     }
 
     /**
