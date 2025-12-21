@@ -87,7 +87,7 @@ suspend fun runMqttApplication(host: String, port: Int, block: suspend Coroutine
 fun runRules(solar: SolarService): suspend CoroutineScope.(MqttClient) -> Unit = { client ->
     val mqtt = MqttClientAdapter(client)
     val dayStart = solar.sunrise laterOf time("07:00")
-    val dayEnd = solar.sunset earlierOf time("18:00")
+    val dayEnd = solar.sunset laterOf time("18:00")
 
     val daytime = window(dayStart, dayEnd)
     val evening = window(dayEnd, "22:00")
