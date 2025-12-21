@@ -56,6 +56,9 @@ interface TimeToken {
         val finalTime = if (resolved < now) forDate(today.plusDays(1)) else resolved
         listOf(finalTime to value)
     }
+
+    infix fun earlierOf(other: TimeToken): TimeToken = SelectedTimeToken(this, other, ::minOf)
+    infix fun laterOf(other: TimeToken): TimeToken = SelectedTimeToken(this, other, ::maxOf)
 }
 
 /**
@@ -74,6 +77,15 @@ class OffsetToken(private val base: TimeToken, private val offset: kotlin.time.D
 
     override fun plus(d: kotlin.time.Duration): TimeToken = OffsetToken(base, offset + d)
     override fun minus(d: kotlin.time.Duration): TimeToken = OffsetToken(base, offset - d)
+}
+
+class SelectedTimeToken(
+    private val first: TimeToken,
+    private val second: TimeToken,
+    private val selector: (LocalDateTime, LocalDateTime) -> LocalDateTime
+) : TimeToken {
+
+    override fun forDate(date: LocalDate): LocalDateTime = selector(first.forDate(date), second.forDate(date))
 }
 
 private val timeFormatter = DateTimeFormatterBuilder()

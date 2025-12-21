@@ -62,16 +62,9 @@ class KinconyD16DimmerTest {
         assertMaps(1, 1, "hw=1 → on (below range)")
         assertMaps(19, 1, "hw=19 → on (just below range)")
 
-        // At range minimum - light is on, maps to 1
-        assertMaps(20, 1, "hw=20 → on (range start)")
-
-        // Middle of range
+        assertMaps(20, 1, "hw=20 → on (range start)")  // At range minimum - light is on, maps to 1
         assertMaps(30, 50, "hw=30 → 50 (range middle)")
-
-        // At range maximum - maps to 99
         assertMaps(40, 99, "hw=40 → 99 (range end)")
-
-        // Above range maximum - should clamp to 99
         assertMaps(50, 99, "hw=50 → 99 (above range)")
     }
 }

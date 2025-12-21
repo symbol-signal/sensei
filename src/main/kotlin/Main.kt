@@ -86,10 +86,14 @@ suspend fun runMqttApplication(host: String, port: Int, block: suspend Coroutine
 
 fun runRules(solar: SolarService): suspend CoroutineScope.(MqttClient) -> Unit = { client ->
     val mqtt = MqttClientAdapter(client)
-    val daytime = window(solar.sunrise, solar.sunset)
-    val evening = window(solar.sunset, "22:00")
+    val dayStart = solar.sunrise laterOf time("07:00")
+    val dayEnd = solar.sunset earlierOf time("18:00")
+
+    val daytime = window(dayStart, dayEnd)
+    val evening = window(dayEnd, "22:00")
     val windingDown = window("22:00", "23:00")
-    val night = window("23:00", solar.sunrise)
+    val night = window("23:00", dayStart)
+
 
     val dimmer = ShellyPro2PMDimmer(mqtt, "shellyprodm2pm/rpc", this)
     val bathroomMainSensor = PresenceSensor(
