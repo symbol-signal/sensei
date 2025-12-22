@@ -4,7 +4,7 @@ import java.time.LocalDateTime
 import kotlin.test.Test
 import kotlin.test.assertEquals
 
-class WindowTest {
+class TimeWindowTest {
 
     private val daytimeWindow = window(time("9am"), time("9pm"))
     private val nighttimeWindow = window(time("9pm"), time("9am"))
