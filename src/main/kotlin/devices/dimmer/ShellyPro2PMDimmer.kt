@@ -1,12 +1,10 @@
 package symsig.sensei.devices.dimmer
 
 import de.kempmobil.ktor.mqtt.PublishRequest
-import symsig.sensei.mqtt.Mqtt
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
-import symsig.sensei.CombinedChannel
-import symsig.sensei.DimmerChannel
+import symsig.sensei.util.mqtt.Mqtt
 
 /**
  * Controls a Shelly Pro Dimmer 2PM device via MQTT using the Shelly RPC protocol.

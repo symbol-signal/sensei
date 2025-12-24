@@ -5,20 +5,33 @@ import de.kempmobil.ktor.mqtt.MqttClient
 import io.github.oshai.kotlinlogging.KotlinLogging
 import io.ktor.client.*
 import io.ktor.client.engine.cio.*
+import kotlin.time.Duration.Companion.hours
+import kotlin.time.Duration.Companion.seconds
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.flow.first
+import java.time.LocalDateTime.now
+import symsig.sensei.devices.CombinedPresenceSensor
+import symsig.sensei.devices.PresenceSensor
+import symsig.sensei.devices.PresenceState
+import symsig.sensei.devices.Switch
+import symsig.sensei.devices.SwitchState
+import symsig.sensei.devices.dimmer.CombinedChannel
+import symsig.sensei.devices.dimmer.DelayableChannel
 import symsig.sensei.devices.dimmer.KinconyD16Dimmer
 import symsig.sensei.devices.dimmer.KinconyD16Dimmer.Channel
-import symsig.sensei.mqtt.MqttClientAdapter
 import symsig.sensei.devices.dimmer.ShellyPro2PMDimmer
 import symsig.sensei.devices.dimmer.ShellyPro2PMDimmer.Channel.Ch1
 import symsig.sensei.devices.dimmer.ShellyPro2PMDimmer.Channel.Ch2
+import symsig.sensei.devices.relay.DelayableRelay
+import symsig.sensei.devices.relay.ShellyPlus1PMRelay
 import symsig.sensei.services.SolarService
+import symsig.sensei.util.mqtt.MqttClientAdapter
 import symsig.sensei.util.schedule.RollingScheduler
-import java.time.LocalDateTime.now
-import kotlin.time.Duration.Companion.hours
-import kotlin.time.Duration.Companion.seconds
+import symsig.sensei.util.time.schedules
+import symsig.sensei.util.time.time
+import symsig.sensei.util.time.window
+
 
 private val log = KotlinLogging.logger {}
 

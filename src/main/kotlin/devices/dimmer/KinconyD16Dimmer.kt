@@ -3,7 +3,6 @@ package symsig.sensei.devices.dimmer
 import io.github.oshai.kotlinlogging.KotlinLogging
 import de.kempmobil.ktor.mqtt.PublishRequest
 import de.kempmobil.ktor.mqtt.buildFilterList
-import symsig.sensei.mqtt.Mqtt
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.flow.SharingStarted
@@ -21,10 +20,10 @@ import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.int
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
-import symsig.sensei.CombinedChannel
-import symsig.sensei.DimmerChannel
 import java.util.concurrent.ConcurrentHashMap
 import kotlin.math.roundToInt
+import symsig.sensei.util.mqtt.Mqtt
+
 
 private val log = KotlinLogging.logger {}
 

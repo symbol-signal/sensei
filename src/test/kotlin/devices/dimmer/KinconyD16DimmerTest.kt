@@ -1,46 +1,15 @@
 package symsig.sensei.devices.dimmer
 
-import de.kempmobil.ktor.mqtt.AtMostOncePublishResponse
-import de.kempmobil.ktor.mqtt.PublishRequest
-import de.kempmobil.ktor.mqtt.PublishResponse
-import de.kempmobil.ktor.mqtt.GrantedQoS0
-import de.kempmobil.ktor.mqtt.Topic
-import de.kempmobil.ktor.mqtt.TopicFilter
-import de.kempmobil.ktor.mqtt.packet.Publish
-import de.kempmobil.ktor.mqtt.packet.Suback
 import kotlinx.coroutines.ExperimentalCoroutinesApi
-import kotlinx.coroutines.flow.MutableSharedFlow
-import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.runTest
-import kotlinx.io.bytestring.encodeToByteString
 import symsig.sensei.devices.dimmer.KinconyD16Dimmer.Channel
-import symsig.sensei.mqtt.Mqtt
+import symsig.sensei.util.mqtt.FakeMqtt
 import kotlin.test.Test
 import kotlin.test.assertEquals
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class KinconyD16DimmerTest {
-
-    class FakeMqtt : Mqtt {
-        private val _publishedPackets = MutableSharedFlow<Publish>(replay = 1)
-        override val publishedPackets: SharedFlow<Publish> = _publishedPackets
-
-        override suspend fun subscribe(filters: List<TopicFilter>): Result<Suback> {
-            return Result.success(Suback(1u, listOf(GrantedQoS0)))
-        }
-
-        override suspend fun publish(request: PublishRequest): Result<PublishResponse> {
-            val dummyPublish = Publish(topic = Topic("dummy"), payload = "".encodeToByteString())
-            return Result.success(AtMostOncePublishResponse(dummyPublish))
-        }
-
-        fun emitStateSync(topic: String, json: String): Boolean {
-            return _publishedPackets.tryEmit(
-                Publish(topic = Topic(topic), payload = json.encodeToByteString())
-            )
-        }
-    }
 
     @Test
     fun `mapFromRange with effective range 20 to 40`() = runTest(UnconfinedTestDispatcher()) {
@@ -51,7 +20,7 @@ class KinconyD16DimmerTest {
         )
 
         fun assertMaps(hardwareValue: Int, expectedLogical: Int, description: String) {
-            mqtt.emitStateSync("dimmer/state", """{"dimmer1":{"value":$hardwareValue}}""")
+            mqtt.emitState("dimmer/state", """{"dimmer1":{"value":$hardwareValue}}""")
             assertEquals(expectedLogical, dimmer.state.value[Channel.Ch1], description)
         }
 

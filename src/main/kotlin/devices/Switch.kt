@@ -1,7 +1,7 @@
-package symsig.sensei
+package symsig.sensei.devices
 
 import de.kempmobil.ktor.mqtt.buildFilterList
-import symsig.sensei.mqtt.Mqtt
+import symsig.sensei.util.mqtt.Mqtt
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow

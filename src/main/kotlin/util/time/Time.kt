@@ -1,4 +1,4 @@
-package symsig.sensei
+package symsig.sensei.util.time
 
 import java.time.Duration
 import java.time.LocalDate
@@ -6,8 +6,10 @@ import java.time.LocalDateTime
 import java.time.LocalTime
 import java.time.format.DateTimeFormatterBuilder
 import java.time.temporal.ChronoField
-import java.time.temporal.ChronoUnit.MILLIS
+import java.time.temporal.ChronoUnit
 import java.util.Locale
+import kotlin.comparisons.maxOf
+import kotlin.comparisons.minOf
 import kotlin.time.toJavaDuration
 
 data class DateTimeRange(val start: LocalDateTime, val end: LocalDateTime) {
@@ -22,7 +24,7 @@ data class DateTimeRange(val start: LocalDateTime, val end: LocalDateTime) {
         if (valueList.size == 1) return listOf(start to valueList.first())
 
         val stepIntervalMs = duration.toMillis() / (valueList.size - 1)
-        return valueList.mapIndexed { index, value -> start.plus(stepIntervalMs * index, MILLIS) to value }
+        return valueList.mapIndexed { index, value -> start.plus(stepIntervalMs * index, ChronoUnit.MILLIS) to value }
     }
 
     /**

@@ -7,7 +7,7 @@ import io.ktor.client.statement.*
 import kotlinx.coroutines.delay
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
-import symsig.sensei.TimeToken
+import symsig.sensei.util.time.TimeToken
 import java.io.IOException
 import java.time.Duration
 import java.time.LocalDate

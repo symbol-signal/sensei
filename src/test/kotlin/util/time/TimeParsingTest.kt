@@ -1,4 +1,4 @@
-package symsig.sensei
+package symsig.sensei.util.time
 
 import java.time.LocalDate
 import java.time.LocalTime.of

@@ -1,4 +1,4 @@
-package symsig.sensei
+package symsig.sensei.util.time
 
 import java.time.LocalDateTime
 import kotlin.test.Test

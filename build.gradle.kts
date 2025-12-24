@@ -24,6 +24,11 @@ dependencies {
     implementation("de.kempmobil.ktor.mqtt:mqtt-client:0.8.1")
     implementation("io.ktor:ktor-client-cio:${ktorVersion}")
 
+    // Kotlin scripting (for dynamic rule loading)
+    implementation("org.jetbrains.kotlin:kotlin-scripting-common:2.2.10")
+    implementation("org.jetbrains.kotlin:kotlin-scripting-jvm:2.2.10")
+    implementation("org.jetbrains.kotlin:kotlin-scripting-jvm-host:2.2.10")
+
     testImplementation(kotlin("test"))
     testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.10.2")
     implementation(kotlin("stdlib-jdk8"))

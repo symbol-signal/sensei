@@ -1,5 +1,6 @@
-package symsig.sensei
+package symsig.sensei.util.t
 
+import symsig.sensei.util.time.DateTimeRange
 import java.time.LocalDateTime.of
 import kotlin.test.Test
 import kotlin.test.assertEquals

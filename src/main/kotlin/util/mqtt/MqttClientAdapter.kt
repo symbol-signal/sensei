@@ -1,4 +1,4 @@
-package symsig.sensei.mqtt
+package symsig.sensei.util.mqtt
 
 import de.kempmobil.ktor.mqtt.MqttClient
 import de.kempmobil.ktor.mqtt.PublishRequest

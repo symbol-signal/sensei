@@ -1,4 +1,4 @@
-package symsig.sensei
+package symsig.sensei.devices.dimmer
 
 import kotlinx.coroutines.CoroutineScope
 import symsig.sensei.util.schedule.DebounceScheduler
@@ -18,7 +18,7 @@ interface DimmerChannel {
 class DelayableChannel(
     private val channel: DimmerChannel,
     scope: CoroutineScope,
-    private val defaultDelay: Duration = Duration.ZERO
+    private val defaultDelay: Duration = Duration.Companion.ZERO
 ) : DimmerChannel {
     private val scheduler = DebounceScheduler(scope)
 
