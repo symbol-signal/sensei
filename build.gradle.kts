@@ -49,3 +49,8 @@ kotlin {
 tasks.withType<JavaCompile> {
     options.release.set(17)
 }
+
+tasks.register<JavaExec>("runScripted") {
+    mainClass.set("symsig.sensei.ScriptedMainKt")
+    classpath = sourceSets["main"].runtimeClasspath
+}

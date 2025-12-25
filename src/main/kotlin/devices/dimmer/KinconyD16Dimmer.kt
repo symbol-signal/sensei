@@ -48,6 +48,7 @@ class KinconyD16Dimmer(
     val state: StateFlow<Map<Channel, Int>> =
         mqtt.publishedPackets
             .filter { it.topic.name == stateTopic }
+            .filter { it.payload.toByteArray().firstOrNull() == '{'.code.toByte() }  // Kincony sends "MQTT is initialized successfully!" on connect
             .map { parseDimmerStates(it.payload) }
             .stateIn(scope, SharingStarted.Eagerly, Channel.entries.associateWith { 0 })
 

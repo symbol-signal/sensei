@@ -36,11 +36,13 @@ class SolarService(private val client: HttpClient) {
     /** TimeToken that resolves to sunset for any given date. */
     val sunset: TimeToken = object : TimeToken {
         override fun forDate(date: LocalDate) = dayFor(date).sunset
+        override fun toString() = "sunset"
     }
 
     /** TimeToken that resolves to sunrise for any given date. */
     val sunrise: TimeToken = object : TimeToken {
         override fun forDate(date: LocalDate) = dayFor(date).sunrise
+        override fun toString() = "sunrise"
     }
 
     val today: SolarDay

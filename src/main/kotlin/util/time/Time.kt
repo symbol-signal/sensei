@@ -68,6 +68,7 @@ interface TimeToken {
  */
 class FixedTimeToken(private val time: LocalTime) : TimeToken {
     override fun forDate(date: LocalDate): LocalDateTime = date.atTime(time)
+    override fun toString(): String = time.toString()
 }
 
 /**
@@ -79,6 +80,7 @@ class OffsetToken(private val base: TimeToken, private val offset: kotlin.time.D
 
     override fun plus(d: kotlin.time.Duration): TimeToken = OffsetToken(base, offset + d)
     override fun minus(d: kotlin.time.Duration): TimeToken = OffsetToken(base, offset - d)
+    override fun toString(): String = if (offset.isNegative()) "$base$offset" else "$base+$offset"
 }
 
 class SelectedTimeToken(
@@ -88,6 +90,7 @@ class SelectedTimeToken(
 ) : TimeToken {
 
     override fun forDate(date: LocalDate): LocalDateTime = selector(first.forDate(date), second.forDate(date))
+    override fun toString(): String = "$first or $second"
 }
 
 private val timeFormatter = DateTimeFormatterBuilder()
