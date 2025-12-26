@@ -9,6 +9,7 @@ import kotlin.time.Duration.Companion.hours
 import kotlin.time.Duration.Companion.seconds
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.drop
+import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.flow.first
 import java.time.LocalDateTime.now
 import symsig.sensei.devices.CombinedPresenceSensor
@@ -107,6 +108,10 @@ fun runRules(solar: SolarService): suspend CoroutineScope.(MqttClient) -> Unit =
     val windingDown = window("22:00", "23:00")
     val night = window("23:00", dayStart)
 
+    val deskLight = Channel.Ch2
+    val hallwayDayLight = Channel.Ch6
+    val hallwayLedLight = Channel.Ch9
+    val mainRoomLedLight = Channel.Ch8
 
     val dimmer = ShellyPro2PMDimmer(mqtt, "shellyprodm2pm/rpc", this)
     val bathroomMainSensor = PresenceSensor(
@@ -175,10 +180,8 @@ fun runRules(solar: SolarService): suspend CoroutineScope.(MqttClient) -> Unit =
         "dimmer/d96c4bd0672e64279c34a168/set",
         this,
         mapOf(
-            Channel.Ch1 to 17..45,
-            Channel.Ch2 to 20..40,
-            Channel.Ch3 to 20..32,
-            Channel.Ch6 to 21..41,
+            deskLight to 20..40,
+            hallwayDayLight to 21..41,
         )
     )
 
@@ -188,7 +191,7 @@ fun runRules(solar: SolarService): suspend CoroutineScope.(MqttClient) -> Unit =
                 solar.sunrise set 99,
                 dayEnd to (dayEnd + 3.hours earlierOf time("22:00")) spread (99 downTo 30),
             ),
-            action = { kinconyDimmer.channel(Channel.Ch2).setBrightness(it) }
+            action = { kinconyDimmer.channel(deskLight).setBrightness(it) }
         ).run()
     }
 
@@ -198,7 +201,7 @@ fun runRules(solar: SolarService): suspend CoroutineScope.(MqttClient) -> Unit =
                 solar.sunrise set 99,
                 time("21:00") to time("23:00") spread (99 downTo 60),
             ),
-            action = { kinconyDimmer.channel(Channel.Ch8).setBrightness(it) }
+            action = { kinconyDimmer.channel(mainRoomLedLight).setBrightness(it) }
         ).run()
     }
 
@@ -208,17 +211,35 @@ fun runRules(solar: SolarService): suspend CoroutineScope.(MqttClient) -> Unit =
     launch {
         hallwaySensor.state.collect { state ->
             val (channel, brightness) = when (now()) {
-                in daytime -> Channel.Ch6 to 99
-                in evening -> Channel.Ch9 to 99
-                in windingDown -> Channel.Ch9 to 50
-                else -> Channel.Ch9 to 35
+                in daytime -> hallwayDayLight to 99
+                in evening -> hallwayLedLight to 99
+                in windingDown -> hallwayLedLight to 50
+                else -> hallwayLedLight to 35
             }
 
             when (state) {
                 PresenceState.PRESENT -> kinconyDimmer.channel(channel).turnOn(brightness)
-                PresenceState.ABSENT, PresenceState.UNKNOWN -> kinconyDimmer.channels(Channel.Ch6, Channel.Ch9).turnOff()
+                PresenceState.ABSENT, PresenceState.UNKNOWN -> kinconyDimmer.channels(hallwayDayLight, hallwayLedLight).turnOff()
             }
         }
+    }
+
+    val bedNightSwitch = Switch(mqtt, "home/bed/switch/1/state", this)
+    launch {
+        val lights = listOf(deskLight, mainRoomLedLight)
+        var savedChannels = listOf<Channel>()
+        bedNightSwitch.state
+            .drop(1)
+            .filter { it == SwitchState.OFF }
+            .collect {
+                val onNow = lights.filter { kinconyDimmer.channel(it).isOn.value }
+                if (onNow.isNotEmpty()) {
+                    onNow.forEach { kinconyDimmer.channel(it).turnOff() }
+                    savedChannels = onNow
+                } else if (savedChannels.isNotEmpty()) {
+                    savedChannels.forEach { kinconyDimmer.channel(it).turnOn() }
+                }
+            }
     }
 }
 
