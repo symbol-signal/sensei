@@ -24,7 +24,9 @@ import symsig.sensei.devices.dimmer.KinconyD16Dimmer.Channel
 import symsig.sensei.devices.dimmer.ShellyPro2PMDimmer
 import symsig.sensei.devices.dimmer.ShellyPro2PMDimmer.Channel.Ch1
 import symsig.sensei.devices.dimmer.ShellyPro2PMDimmer.Channel.Ch2
+import symsig.sensei.devices.Switchable
 import symsig.sensei.devices.relay.DelayableRelay
+import symsig.sensei.devices.relay.KinconyMiniServerRelay
 import symsig.sensei.devices.relay.ShellyPlus1PMRelay
 import symsig.sensei.services.SolarService
 import symsig.sensei.util.mqtt.MqttClientAdapter
@@ -224,20 +226,38 @@ fun runRules(solar: SolarService): suspend CoroutineScope.(MqttClient) -> Unit =
         }
     }
 
+    val kitchenLight = KinconyMiniServerRelay(
+        mqtt,
+        stateTopic = "home/kitchen/light/state",
+        commandTopic = "home/kitchen/light/command",
+        this
+    )
+    val mainLight = KinconyMiniServerRelay(
+        mqtt,
+        stateTopic = "home/main/light/state",
+        commandTopic = "home/main/light/command",
+        this
+    )
+
     val bedNightSwitch = Switch(mqtt, "home/bed/switch/1/state", this)
     launch {
-        val lights = listOf(deskLight, mainRoomLedLight)
-        var savedChannels = listOf<Channel>()
+        val lights: List<Switchable> = listOf(
+            kinconyDimmer.channel(deskLight),
+            kinconyDimmer.channel(mainRoomLedLight),
+            kitchenLight,
+            mainLight
+        )
+        var savedLights = listOf<Switchable>()
         bedNightSwitch.state
             .drop(1)
             .filter { it == SwitchState.OFF }
             .collect {
-                val onNow = lights.filter { kinconyDimmer.channel(it).isOn.value }
+                val onNow = lights.filter { it.isOn.value }
                 if (onNow.isNotEmpty()) {
-                    onNow.forEach { kinconyDimmer.channel(it).turnOff() }
-                    savedChannels = onNow
-                } else if (savedChannels.isNotEmpty()) {
-                    savedChannels.forEach { kinconyDimmer.channel(it).turnOn() }
+                    onNow.forEach { it.turnOff() }
+                    savedLights = onNow
+                } else if (savedLights.isNotEmpty()) {
+                    savedLights.forEach { it.turnOn() }
                 }
             }
     }

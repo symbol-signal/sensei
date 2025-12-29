@@ -22,6 +22,7 @@ import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import java.util.concurrent.ConcurrentHashMap
 import kotlin.math.roundToInt
+import symsig.sensei.devices.Switchable
 import symsig.sensei.util.mqtt.Mqtt
 
 
@@ -119,10 +120,10 @@ class KinconyD16Dimmer(
         return CombinedChannel(channels.map { channel(it) })
     }
 
-    inner class KinconyD16Channel(val channel: Channel, val brightness: StateFlow<Int>) : DimmerChannel {
+    inner class KinconyD16Channel(val channel: Channel, val brightness: StateFlow<Int>) : DimmerChannel, Switchable {
 
         /** Whether the light is currently on (brightness > 0). */
-        val isOn: StateFlow<Boolean> = brightness
+        override val isOn: StateFlow<Boolean> = brightness
             .map { it > 0 }
             .distinctUntilChanged()
             .stateIn(scope, SharingStarted.WhileSubscribed(5000), brightness.value > 0)
@@ -181,6 +182,9 @@ class KinconyD16Dimmer(
         override suspend fun turnOn(brightness: Int?) {
             sendDimmerValue(brightness ?: programmaticBrightness ?: lastBrightness.value)
         }
+
+        /** Switchable implementation - delegates to turnOn(null) */
+        override suspend fun turnOn() = turnOn(null)
 
         override suspend fun turnOff() {
             sendDimmerValue(0)
